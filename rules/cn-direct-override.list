@@ -1,0 +1,117 @@
+# 微信 / 淘宝 / 支付宝优先直连
+# 必须排在 AI、Google、TikTok 以及 FINAL 之前，以 DIRECT 策略使用。
+# 主 INI 的 CN DIRECT OVERRIDES 区块内联同一份规则，不依赖尚未发布的远程文件。
+# 进程规则依赖客户端的进程识别；路由器无法识别下游设备的进程。
+# 不全局直连公共 STUN 或整个腾讯云 ASN，避免影响其他应用的出口。
+
+# --- Windows / macOS 进程 ---
+PROCESS-NAME,WeChat.exe
+PROCESS-NAME,Weixin.exe
+PROCESS-NAME,WeChatAppEx.exe
+PROCESS-NAME,WeChatApp.exe
+PROCESS-NAME,WeChatPlayer.exe
+PROCESS-NAME,WeChat
+PROCESS-NAME,Weixin
+PROCESS-NAME,WeChatAppEx
+PROCESS-NAME,WXWork.exe
+PROCESS-NAME,WeCom.exe
+PROCESS-NAME,Taobao.exe
+PROCESS-NAME,taobao.exe
+PROCESS-NAME,AliWorkbench.exe
+PROCESS-NAME,Qianniu.exe
+PROCESS-NAME,AliRender.exe
+PROCESS-NAME,Alipay.exe
+PROCESS-NAME,AliPay.exe
+PROCESS-NAME,AlipayMain.exe
+PROCESS-NAME,QQ.exe
+PROCESS-NAME,QQnt.exe
+
+# --- Android 包名 ---
+PROCESS-NAME,com.tencent.mm
+PROCESS-NAME,com.tencent.wework
+PROCESS-NAME,com.eg.android.AlipayGphone
+PROCESS-NAME,com.taobao.taobao
+PROCESS-NAME,com.taobao.qianniu
+PROCESS-NAME,com.tmall.wireless
+PROCESS-NAME,com.taobao.idlefish
+PROCESS-NAME,com.alibaba.android.rimet
+PROCESS-NAME,com.tencent.mobileqq
+
+# --- 微信补充（ChinaDomain 未覆盖的图片/小程序/支付域） ---
+# 含 blackmatrix7 WeChat.list 的域名项，不引入 IP-ASN,132203。
+DOMAIN,dldir1.qq.com
+DOMAIN,slife.xy-asia.com
+DOMAIN,soup.v.qq.com
+DOMAIN,vweixinf.tc.qq.com
+DOMAIN,wup.imtt.qq.com
+DOMAIN-SUFFIX,iot-tencent.com
+DOMAIN-SUFFIX,lbs.gtimg.com
+DOMAIN-SUFFIX,map.qq.com
+DOMAIN-SUFFIX,tenpay.com
+DOMAIN-SUFFIX,up-hl.3g.qq.com
+DOMAIN-SUFFIX,vweixinthumb.tc.qq.com
+DOMAIN-SUFFIX,weixinsxy.com
+DOMAIN-SUFFIX,wx.gtimg.com
+DOMAIN-SUFFIX,wxapp.tc.qq.com
+DOMAIN-SUFFIX,yun-hl.3g.qq.com
+DOMAIN-SUFFIX,servicewechat.com
+DOMAIN-SUFFIX,weixinbridge.com
+DOMAIN-SUFFIX,wechatos.net
+DOMAIN-SUFFIX,wechatlegal.net
+DOMAIN-SUFFIX,wechatpay.com
+DOMAIN-SUFFIX,qlogo.cn
+DOMAIN-SUFFIX,qpic.cn
+DOMAIN-SUFFIX,weixin.qq.com
+DOMAIN-SUFFIX,wx.qq.com
+DOMAIN-SUFFIX,wxs.qq.com
+DOMAIN-SUFFIX,wechat.com
+DOMAIN-SUFFIX,weixin.com
+DOMAIN,weixin110.qq.com
+DOMAIN,btrace.qq.com
+DOMAIN,apd-pcdnwxlogin.teg.tencent-cloud.net
+
+# --- 淘宝 / 支付宝风控与 SDK ---
+DOMAIN,sdkinit.taobao.com
+DOMAIN-SUFFIX,adash-c.m.taobao.com
+DOMAIN-SUFFIX,adash-c.ut.taobao.com
+DOMAIN-SUFFIX,adashx4yt.m.taobao.com
+DOMAIN-SUFFIX,adashxgc.ut.taobao.com
+DOMAIN-SUFFIX,alipaylog.com
+DOMAIN-SUFFIX,mmstat.com
+DOMAIN-SUFFIX,taobao.com
+DOMAIN-SUFFIX,tmall.com
+DOMAIN-SUFFIX,alicdn.com
+DOMAIN-SUFFIX,alipay.com
+DOMAIN-SUFFIX,alipayobjects.com
+DOMAIN-SUFFIX,aliyun.com
+DOMAIN-SUFFIX,aliyuncs.com
+
+# --- 国内统计 / 推送 / 风控 SDK ---
+DOMAIN-SUFFIX,umeng.com
+DOMAIN-SUFFIX,umengcloud.com
+DOMAIN-SUFFIX,jpush.cn
+DOMAIN-SUFFIX,jiguang.cn
+DOMAIN-SUFFIX,getui.com
+DOMAIN-SUFFIX,igexin.com
+DOMAIN-SUFFIX,geetest.com
+DOMAIN-SUFFIX,ishumei.com
+DOMAIN-SUFFIX,fengkongcloud.com
+DOMAIN-SUFFIX,mob.com
+
+# --- 国内 AI 固定补充；其余由主 INI 的 VPSDance cn.list 更新 ---
+DOMAIN-SUFFIX,deepseek.com
+DOMAIN-SUFFIX,kimi.com
+DOMAIN-SUFFIX,moonshot.cn
+DOMAIN-SUFFIX,doubao.com
+DOMAIN-SUFFIX,qwen.ai
+DOMAIN-SUFFIX,zhipuai.cn
+DOMAIN-SUFFIX,bigmodel.cn
+DOMAIN-SUFFIX,coze.cn
+DOMAIN-SUFFIX,trae.cn
+
+# --- 字节国内（TikTok.list 含 snssdk，会误伤抖音） ---
+# 主 INI 优先匹配 TikTok 进程；仅凭这些共享域名无法区分国内外客户端。
+DOMAIN-SUFFIX,snssdk.com
+DOMAIN-SUFFIX,isnssdk.com
+DOMAIN-SUFFIX,douyin.com
+# bytedance.com 由主 INI 的通用国内规则处理，让海外 AI 子域先匹配。
