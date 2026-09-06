@@ -116,16 +116,18 @@ class ConfigTests(unittest.TestCase):
         for _, source in expected:
             self.assertRegex(source, r"^\[\](PROCESS-NAME|DOMAIN|DOMAIN-SUFFIX),[^,]+$")
 
-    def test_yaml_sources_have_explicit_types(self):
-        expected = {"direct.txt": "clash-domain", "gfw.txt": "clash-domain", "cncidr.txt": "clash-ipcidr"}
+    def test_loyalsoldier_sources_are_surge_rulesets(self):
+        expected = {"direct.txt", "gfw.txt", "cncidr.txt"}
         found = set()
         for _, source in self.rules:
-            if "/Loyalsoldier/clash-rules/" in source:
+            self.assertNotIn("clash-domain:", source)
+            self.assertNotIn("clash-ipcidr:", source)
+            if "/Loyalsoldier/" in source:
                 kind, url = source_type(source)
-                name = url.rsplit("/", 1)[-1]
-                self.assertEqual(kind, expected[name])
-                found.add(name)
-        self.assertEqual(found, set(expected))
+                self.assertEqual(kind, "surge")
+                self.assertIn("/Loyalsoldier/surge-rules/release/ruleset/", url)
+                found.add(url.rsplit("/", 1)[-1])
+        self.assertEqual(found, expected)
 
     def test_specific_services_precede_general_direct_rules(self):
         direct = self.position("/direct.txt")
