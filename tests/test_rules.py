@@ -132,7 +132,8 @@ class ConfigTests(unittest.TestCase):
     def test_specific_services_precede_general_direct_rules(self):
         direct = self.position("/direct.txt")
         china = self.position("/ChinaDomain.list")
-        for suffix in (",gvt1.com", ",gvt2.com", ",storage.googleapis.com",
+        for suffix in (",gvt1.com", ",gvt2.com", ",gvt3.com", ",storage.googleapis.com",
+                       ",googleapis.cn", ",xn--ngstr-lra8j.com", ",linux.sb",
                        "/global.list", "/YouTube.list", "/TikTok.list"):
             self.assertLess(self.position(suffix), min(direct, china), suffix)
         self.assertLess(self.position("/global.list"), self.position("/cn.list"))
@@ -159,7 +160,12 @@ class ConfigTests(unittest.TestCase):
             "adash-c.m.taobao.com": "DIRECT",
             "servicewechat.com": "DIRECT",
             "api.bigmodel.cn": "DIRECT",
+            "linux.sb": NODE,
+            "www.linux.sb": NODE,
             "redirector.gvt1.com": NODE,
+            "services.googleapis.cn": NODE,
+            "r3---sn-ni5e6n7z.xn--ngstr-lra8j.com": NODE,
+            "android.googleapis.com": NODE,
             "storage.googleapis.com": NODE,
             "stun.l.google.com": NODE,
             "stun.cloudflare.com": NODE,
@@ -181,6 +187,7 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(process=process):
                 self.assertEqual(first_match(self.inline, "stun.l.google.com", process), "DIRECT")
         self.assertEqual(first_match(self.inline, "api.snssdk.com", "com.zhiliaoapp.musically"), MEDIA)
+        self.assertEqual(first_match(self.inline, "unmatched.example", "com.android.vending"), NODE)
 
 
 class LiveRulesTests(unittest.TestCase):
@@ -284,8 +291,13 @@ class LiveRulesTests(unittest.TestCase):
             "d1.awsstatic.com": NODE,
             "browser-intake-datadoghq.com": NODE,
             "copilot.microsoft.com": AI,
+            "linux.sb": NODE,
+            "www.linux.sb": NODE,
             "redirector.gvt1.com": NODE,
             "beacons.gvt2.com": NODE,
+            "r3---sn-ni5e6n7z.xn--ngstr-lra8j.com": NODE,
+            "services.googleapis.cn": NODE,
+            "android.googleapis.com": NODE,
             "storage.googleapis.com": NODE,
             "play.googleapis.com": NODE,
             "stun.l.google.com": NODE,
@@ -314,6 +326,9 @@ class LiveRulesTests(unittest.TestCase):
 
     def test_tiktok_process_precedes_shared_domestic_domain(self):
         self.assertEqual(first_match(self.expanded, "api.snssdk.com", "com.zhiliaoapp.musically"), MEDIA)
+
+    def test_play_store_process_uses_node(self):
+        self.assertEqual(first_match(self.expanded, "unmatched.example", "com.android.vending"), NODE)
 
 
 if __name__ == "__main__":
