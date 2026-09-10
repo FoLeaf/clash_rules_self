@@ -26,6 +26,9 @@ MEDIA = "\U0001f3ac \u56fd\u5916\u6d41\u5a92\u4f53"
 SOCIAL = "\U0001f310 \u56fd\u5916\u793e\u4ea4"
 TELEGRAM = "\U0001f4f2 \u7535\u62a5\u6d88\u606f"
 FALLBACK = "\U0001f41f \u6f0f\u7f51\u4e4b\u9c7c"
+GAMES = "\U0001f3ae \u6e38\u620f\u5e73\u53f0"
+APPLE = "\U0001f34e \u82f9\u679c\u670d\u52a1"
+MICROSOFT = "\u24c2\ufe0f \u5fae\u8f6f\u670d\u52a1"
 ONLINE = False
 CACHE_DIR = None
 GENERATED_YAML = None
@@ -50,10 +53,70 @@ def rulesets(text):
 
 
 def source_type(source):
-    for kind in ("surge", "clash-domain", "clash-ipcidr", "clash-classic"):
+    for kind in ("surge", "quanx", "clash-domain", "clash-ipcidr", "clash-classic"):
         if source.startswith(kind + ":"):
             return kind, source[len(kind) + 1:]
     return "surge", source
+
+
+def parse_ruleset(text, kind):
+    if kind.startswith("clash-"):
+        import yaml
+
+        payload = yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))["payload"]
+        if not isinstance(payload, list) or not payload:
+            raise ValueError("Expected a nonempty YAML payload list")
+        entries = []
+        for value in payload:
+            if kind == "clash-domain":
+                prefix = "DOMAIN,"
+                if value.startswith("+."):
+                    prefix, value = "DOMAIN-SUFFIX,", value[2:]
+                elif value.startswith("."):
+                    prefix, value = "DOMAIN-SUFFIX,", value[1:]
+                entries.append(prefix + value)
+            elif kind == "clash-ipcidr":
+                entries.append(("IP-CIDR6," if ":" in value else "IP-CIDR,") + value)
+            else:
+                entries.append(value)
+        return entries
+
+    entries = active_lines(text)
+    if kind == "quanx":
+        aliases = {
+            "HOST": "DOMAIN",
+            "HOST-SUFFIX": "DOMAIN-SUFFIX",
+            "HOST-KEYWORD": "DOMAIN-KEYWORD",
+            "IP6-CIDR": "IP-CIDR6",
+        }
+        normalized = []
+        for entry in entries:
+            parts = [part.strip() for part in entry.split(",")]
+            if len(parts) < 2 or not parts[1]:
+                raise ValueError("Expected a Quantumult X rule with a payload")
+            rule_type = parts[0].upper()
+            rule = aliases.get(rule_type, rule_type) + "," + parts[1]
+            # The INI target replaces any Quantumult X policy tag.
+            if len(parts) > 2 and parts[-1] == "no-resolve":
+                rule += ",no-resolve"
+            normalized.append(rule)
+        entries = normalized
+    if not entries or any(not re.match(r"^[A-Z][A-Z0-9-]*,", entry) for entry in entries):
+        raise ValueError("Expected a plain rule list, not YAML or HTML")
+    return entries
+
+
+def select_members(group, nodes):
+    name, kind, *selectors = group.split("`")
+    if kind != "select":
+        raise ValueError(f"{name} is not a select group")
+    members = []
+    for selector in selectors:
+        if selector.startswith("[]"):
+            members.append(selector[2:])
+        else:
+            members.extend(node for node in nodes if node not in members and re.search(selector, node))
+    return members or ["DIRECT"]
 
 
 def fetch_text(url):
@@ -102,11 +165,32 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(active_lines(self.text)[0], "[custom]")
         self.assertEqual(values(self.text, "enable_rule_generator"), ["true"])
         self.assertEqual(values(self.text, "overwrite_original_rules"), ["true"])
-        groups = [value.split("`")[0] for value in values(self.text, "custom_proxy_group")]
+        group_values = values(self.text, "custom_proxy_group")
+        groups = [value.split("`")[0] for value in group_values]
         self.assertEqual(len(groups), len(set(groups)))
         for target, _ in self.rules:
             self.assertIn(target, [*groups, "DIRECT", "REJECT"])
+        for group in group_values:
+            for member in group.split("`")[2:]:
+                if member.startswith("[]"):
+                    self.assertIn(member[2:], [*groups, "DIRECT", "REJECT"], group)
         self.assertEqual(len(self.rules), len(set(self.rules)))
+
+    def test_select_defaults_and_optional_residential_nodes(self):
+        groups = {group.split("`")[0]: group for group in values(self.text, "custom_proxy_group")}
+        ordinary_nodes = ["Example SG", "Example US"]
+        for name in (AI, SOCIAL, GAMES, FALLBACK):
+            self.assertEqual(select_members(groups[name], ordinary_nodes)[0], NODE, name)
+        for name in (APPLE, MICROSOFT):
+            self.assertEqual(select_members(groups[name], ordinary_nodes)[0], "DIRECT", name)
+        for name in (AI, SOCIAL):
+            selectors = groups[name].split("`")[2:4]
+            for selector in selectors:
+                self.assertTrue(selector.startswith("^") and selector.endswith("$"), selector)
+            preferred, alternate = [selector[1:-1] for selector in selectors]
+            nodes = [*ordinary_nodes, alternate, preferred]
+            self.assertEqual(select_members(groups[name], nodes)[:2], [preferred, alternate])
+            self.assertEqual(select_members(groups[name], [alternate, *ordinary_nodes])[0], alternate)
 
     def test_override_file_is_inlined_in_order(self):
         block = self.text.split("; BEGIN CN DIRECT OVERRIDES\n", 1)[1]
@@ -134,10 +218,27 @@ class ConfigTests(unittest.TestCase):
         china = self.position("/ChinaDomain.list")
         for suffix in (",gvt1.com", ",gvt2.com", ",gvt3.com", ",storage.googleapis.com",
                        ",googleapis.cn", ",xn--ngstr-lra8j.com", ",linux.sb",
-                       "/global.list", "/YouTube.list", "/TikTok.list"):
+                       "/global.list", "/YouTube.list", "/TikTok.list",
+                       "/Bing.list", "/OneDrive.list", "/Microsoft.list", "/Apple.list",
+                       "/Epic.list", "/Steam.list", "/Nintendo.list", "/PlayStation.list"):
             self.assertLess(self.position(suffix), min(direct, china), suffix)
         self.assertLess(self.position("/global.list"), self.position("/cn.list"))
         self.assertNotIn("/rules/surge/all.list", self.text)
+
+    def test_ai_source_excludes_whole_process_routing(self):
+        source = self.rules[self.position("/global.list")][1]
+        kind, url = source_type(source)
+        self.assertEqual(kind, "quanx")
+        self.assertEqual(url, "https://raw.githubusercontent.com/VPSDance/ai-proxy-rules/main/rules/quantumult-x/global.list")
+
+    def test_downloads_follow_destination_before_bt_fallback(self):
+        self.assertFalse(any(source.endswith(("/UnBan.list", "/Download.list")) for _, source in self.rules))
+        self.assertLess(self.position("/SteamCN.list"), self.position("/Steam.list"))
+        for process in ("qbittorrent.exe", "qbittorrent", "Transmission.exe", "Transmission",
+                        "transmission-daemon", "uTorrent.exe", "WebTorrent.exe", "WebTorrent Helper.exe"):
+            position = self.position("[]PROCESS-NAME," + process)
+            self.assertGreater(position, self.position("/gfw.txt"))
+            self.assertLess(position, self.position("/ChinaCompanyIp.list"))
 
     def test_google_and_ip_fallback_order(self):
         for suffix in ("/global.list", "/YouTube.list", "/GoogleCN.list"):
@@ -147,7 +248,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(self.rules[-1], (FALLBACK, "[]FINAL"))
         self.assertEqual(sum(source in ("[]FINAL", "[]MATCH") for _, source in self.rules), 1)
         fallback = next(group for group in values(self.text, "custom_proxy_group") if group.startswith(FALLBACK + "`"))
-        self.assertEqual(fallback.split("`")[2], "[]DIRECT")
+        self.assertEqual(fallback.split("`")[2], "[]" + NODE)
 
     def test_no_blanket_tencent_cloud_direct(self):
         for _, source in self.rules:
@@ -190,6 +291,36 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(first_match(self.inline, "unmatched.example", "com.android.vending"), NODE)
 
 
+class RulesetParsingTests(unittest.TestCase):
+    def test_quanx_prefix(self):
+        self.assertEqual(source_type("quanx:https://example.com/global.list"),
+                         ("quanx", "https://example.com/global.list"))
+
+    def test_quanx_rules_are_normalized(self):
+        text = "\n".join((
+            "# comment",
+            "HOST,api.example.com",
+            "HOST-SUFFIX,example.com,old-policy",
+            "host-keyword,example,old-policy",
+            "IP-CIDR,192.0.2.0/24,no-resolve",
+            "IP6-CIDR,2001:db8::/32,old-policy,no-resolve",
+        ))
+        self.assertEqual(parse_ruleset(text, "quanx"), [
+            "DOMAIN,api.example.com",
+            "DOMAIN-SUFFIX,example.com",
+            "DOMAIN-KEYWORD,example",
+            "IP-CIDR,192.0.2.0/24,no-resolve",
+            "IP-CIDR6,2001:db8::/32,no-resolve",
+        ])
+
+    def test_invalid_lists_fail(self):
+        for kind in ("surge", "quanx"):
+            for text in ("", "# empty", "<html>error</html>", "payload:\n  - '+.example.com'"):
+                with self.subTest(kind=kind, text=text):
+                    with self.assertRaises(ValueError):
+                        parse_ruleset(text, kind)
+
+
 class LiveRulesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -224,27 +355,7 @@ class LiveRulesTests(unittest.TestCase):
                     CACHE_DIR.mkdir(parents=True, exist_ok=True)
                     name = hashlib.sha256(url.encode()).hexdigest()[:16] + ".txt"
                     (CACHE_DIR / name).write_text(text, encoding="utf-8", newline="")
-                if kind.startswith("clash-"):
-                    payload = load(text)["payload"]
-                    if not isinstance(payload, list) or not payload:
-                        raise ValueError("Expected a nonempty YAML payload list")
-                    entries = []
-                    for value in payload:
-                        if kind == "clash-domain":
-                            prefix = "DOMAIN,"
-                            if value.startswith("+."):
-                                prefix, value = "DOMAIN-SUFFIX,", value[2:]
-                            elif value.startswith("."):
-                                prefix, value = "DOMAIN-SUFFIX,", value[1:]
-                            entries.append(prefix + value)
-                        elif kind == "clash-ipcidr":
-                            entries.append(("IP-CIDR6," if ":" in value else "IP-CIDR,") + value)
-                        else:
-                            entries.append(value)
-                else:
-                    entries = active_lines(text)
-                    if not entries or any(not re.match(r"^[A-Z][A-Z0-9-]*,", entry) for entry in entries):
-                        raise ValueError("Expected a plain rule list, not YAML or HTML")
+                entries = parse_ruleset(text, kind)
                 cls.expanded.extend((policy, entry) for entry in entries)
                 sources += 1
                 print("OK", kind, url.rsplit("/", 1)[-1], len(entries), flush=True)
@@ -329,6 +440,108 @@ class LiveRulesTests(unittest.TestCase):
 
     def test_play_store_process_uses_node(self):
         self.assertEqual(first_match(self.expanded, "unmatched.example", "com.android.vending"), NODE)
+
+    def test_service_groups_are_selectable(self):
+        cases = {
+            "steamcommunity.com": GAMES,
+            "store.steampowered.com": GAMES,
+            "login.epicgames.com": GAMES,
+            "account-public-service-prod03.ol.epicgames.com": GAMES,
+            "www.playstation.com": GAMES,
+            "accounts.nintendo.com": GAMES,
+            "music.apple.com": APPLE,
+            "www.apple.com": APPLE,
+            "apps.apple.com": APPLE,
+            "www.icloud.com": APPLE,
+            "cn.bing.com": MICROSOFT,
+            "onedrive.live.com": MICROSOFT,
+        }
+        for domain, expected in cases.items():
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.expanded, domain), expected)
+
+    def test_domestic_downloads_stay_direct(self):
+        for domain in ("dl.google.com", "dl.steam.clngaa.com", "dl.steam.ksyna.com",
+                       "cdn.steamcontent.com", "csgo.wmsj.cn", "www.bilibili.com"):
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.expanded, domain), "DIRECT")
+
+    def test_general_downloaders_follow_destination(self):
+        cases = {
+            "drive.google.com": NODE,
+            "raw.githubusercontent.com": NODE,
+            "archive.org": NODE,
+            "steamcommunity.com": GAMES,
+            "dl.steam.clngaa.com": "DIRECT",
+            "www.baidu.com": "DIRECT",
+            "unmatched.example": FALLBACK,
+        }
+        for process in (None, "aria2c.exe", "fdm.exe"):
+            for domain, expected in cases.items():
+                with self.subTest(process=process, domain=domain):
+                    self.assertEqual(first_match(self.expanded, domain, process), expected)
+
+    def test_ai_clients_follow_destination(self):
+        cases = {
+            "api.siliconflow.cn": "DIRECT",
+            "api.moonshot.ai": "DIRECT",
+            "api.deepseek.com": "DIRECT",
+            "www.baidu.com": "DIRECT",
+            "pypi.tuna.tsinghua.edu.cn": "DIRECT",
+            "api.openai.com": AI,
+            "claude.ai": AI,
+            "generativelanguage.googleapis.com": AI,
+            "trae-api-sg.mchost.guru": AI,
+            "abtestvm-sg.bytedance.com": AI,
+            "drive.google.com": NODE,
+            "unmatched.example": FALLBACK,
+        }
+        for process in ("Cursor.exe", "Codex.exe", "Claude.exe", "Windsurf", "Antigravity.exe"):
+            for domain, expected in cases.items():
+                with self.subTest(process=process, domain=domain):
+                    self.assertEqual(first_match(self.expanded, domain, process), expected)
+        self.assertFalse(any(policy == AI and rule.startswith(("PROCESS-", "PACKAGE-NAME,"))
+                             for policy, rule in self.expanded))
+
+    def test_bt_direct_is_only_a_fallback(self):
+        for process in ("qbittorrent.exe", "Transmission", "transmission-daemon", "uTorrent.exe"):
+            with self.subTest(process=process):
+                self.assertEqual(first_match(self.expanded, "unmatched.example", process), "DIRECT")
+                self.assertEqual(first_match(self.expanded, "raw.githubusercontent.com", process), NODE)
+
+
+class GeneratedConfigTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not GENERATED_YAML:
+            raise unittest.SkipTest("Use --generated-yaml for actual converter group checks")
+        import yaml
+
+        cls.config = yaml.load(GENERATED_YAML.read_text(encoding="utf-8-sig"),
+                               Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
+    def test_all_references_exist(self):
+        groups = self.config["proxy-groups"]
+        names = [proxy["name"] for proxy in self.config["proxies"]] + [group["name"] for group in groups]
+        self.assertEqual(len(names), len(set(names)))
+        available = {*names, "DIRECT", "REJECT"}
+        for group in groups:
+            self.assertTrue(group["proxies"], group["name"])
+            for member in group["proxies"]:
+                self.assertIn(member, available, group["name"])
+        for rule in self.config["rules"]:
+            parts = rule.split(",")
+            self.assertNotIn(parts[0], ("HOST", "HOST-SUFFIX", "HOST-KEYWORD", "IP6-CIDR", "RULE-SET"))
+            target = parts[1] if parts[0] in ("FINAL", "MATCH") else parts[2]
+            self.assertIn(target, available, rule)
+
+    def test_select_groups_match_template(self):
+        nodes = [proxy["name"] for proxy in self.config["proxies"]]
+        generated = {group["name"]: group for group in self.config["proxy-groups"]}
+        for group in values(CONFIG.read_text(encoding="utf-8-sig"), "custom_proxy_group"):
+            name, kind, *_ = group.split("`")
+            if kind == "select":
+                self.assertEqual(generated[name]["proxies"], select_members(group, nodes), name)
 
 
 if __name__ == "__main__":
