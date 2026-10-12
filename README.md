@@ -10,6 +10,15 @@ still required.
 - Known domestic applications, domestic AI services and domestic download CDNs
   use DIRECT.
 - Overseas AI, social, streaming and game services use their respective groups.
+- Anthropic traffic is pinned to the AI group: claude.ai, claude.com and the
+  other Claude product domains, anthropic.com with all its subdomains
+  (API, console, statsig telemetry), plus dedicated third-party hostnames such
+  as anthropic.auth0.com and anthropic.com.cdn.cloudflare.net are matched
+  inline before shared SaaS fallbacks and the aggregated AI list. Upstream list
+  changes cannot move Anthropic traffic out of the AI group. Multi-tenant
+  telemetry and challenge domains (sentry.io ingest, datadog,
+  challenges.cloudflare.com) stay on node selection by design; align the AI and
+  node-selection exits if login challenges loop.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
 - Games and unmatched traffic default to node selection. DIRECT remains an
   explicit option.
@@ -25,6 +34,8 @@ Overseas AI uses VPSDance's Quantumult X list because it excludes whole-process
 rules. The `quanx:` prefix is required: subconverter must translate `HOST` rules
 to Clash domain rules. Do not replace it with the Surge list, whose process rules
 would also proxy domestic requests from Cursor, Codex and other AI clients.
+Anthropic is additionally pinned inline ahead of that list, so its routing does
+not depend on upstream coverage; the aggregated list only supplements it.
 
 ## Optional Residential Proxies
 

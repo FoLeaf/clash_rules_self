@@ -271,6 +271,17 @@ class ConfigTests(unittest.TestCase):
             "stun.l.google.com": NODE,
             "stun.cloudflare.com": NODE,
             "global.stun.twilio.com": NODE,
+            "claude.ai": AI,
+            "www.claude.com": AI,
+            "api.anthropic.com": AI,
+            "console.anthropic.com": AI,
+            "statsig.anthropic.com": AI,
+            "code.claude.dev": AI,
+            "claudeusercontent.com": AI,
+            "claudemcpcontent.com": AI,
+            "anthropic.com.cdn.cloudflare.net": AI,
+            "servd-anthropic-website.b-cdn.net": AI,
+            "anthropic-com.ghost.io": AI,
             "anthropic.auth0.com": AI,
             "challenges.cloudflare.com": NODE,
             "www.recaptcha.net": NODE,
@@ -289,6 +300,21 @@ class ConfigTests(unittest.TestCase):
                 self.assertEqual(first_match(self.inline, "stun.l.google.com", process), "DIRECT")
         self.assertEqual(first_match(self.inline, "api.snssdk.com", "com.zhiliaoapp.musically"), MEDIA)
         self.assertEqual(first_match(self.inline, "unmatched.example", "com.android.vending"), NODE)
+
+    def test_anthropic_traffic_is_locked_to_ai_group(self):
+        block = self.position("[]DOMAIN-SUFFIX,anthropic.com")
+        for guard in ("[]DOMAIN-SUFFIX,auth0.com", "[]DOMAIN-KEYWORD,sentry",
+                      "/global.list", "/Google.list", "/ChinaDomain.list", "[]FINAL"):
+            self.assertLess(block, self.position(guard), guard)
+        anthropic_rules = [(policy, rule) for policy, rule in self.inline
+                           if "anthropic" in rule or "claude" in rule]
+        self.assertEqual(len(anthropic_rules), 14)
+        for policy, rule in anthropic_rules:
+            self.assertEqual(policy, AI, rule)
+        for domain in ("claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com",
+                       "api.anthropic.com", "statsig.anthropic.com"):
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.inline, domain), AI)
 
 
 class RulesetParsingTests(unittest.TestCase):
@@ -390,6 +416,12 @@ class LiveRulesTests(unittest.TestCase):
             "trae-api-sg.mchost.guru": AI,
             "abtestvm-sg.bytedance.com": AI,
             "claude.ai": AI,
+            "claude.com": AI,
+            "api.anthropic.com": AI,
+            "statsig.anthropic.com": AI,
+            "claudeusercontent.com": AI,
+            "code.claude.dev": AI,
+            "anthropic.com.cdn.cloudflare.net": AI,
             "anthropic.auth0.com": AI,
             "chatgpt.com": AI,
             "api.openai.com": AI,
@@ -490,6 +522,7 @@ class LiveRulesTests(unittest.TestCase):
             "pypi.tuna.tsinghua.edu.cn": "DIRECT",
             "api.openai.com": AI,
             "claude.ai": AI,
+            "api.anthropic.com": AI,
             "generativelanguage.googleapis.com": AI,
             "trae-api-sg.mchost.guru": AI,
             "abtestvm-sg.bytedance.com": AI,
