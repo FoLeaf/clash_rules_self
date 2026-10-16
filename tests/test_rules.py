@@ -9,6 +9,7 @@ These are domain/process checks, not DNS, IP-resolution, or connectivity tests.
 import argparse
 import hashlib
 import ipaddress
+import json
 import re
 import sys
 import time
@@ -20,6 +21,34 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "acl4ssr-ai-chain-v2.ini"
 OVERRIDES = ROOT / "rules" / "cn-direct-override.list"
+OPENAI_OVERRIDES = ROOT / "rules" / "openai-ai.list"
+# Independent acceptance cases from OpenAI's published network recommendations,
+# plus product endpoints and dedicated CDN/voice hosts. Do not derive from rules.
+OPENAI_DOMAINS = (
+    "openai.com", "api.openai.com", "platform.openai.com", "developers.openai.com",
+    "auth.openai.com", "auth0.openai.com", "setup.auth.openai.com",
+    "chat.openai.com", "desktop.chat.openai.com", "android.chat.openai.com",
+    "ios.chat.openai.com", "tcr9i.chat.openai.com", "cdn.platform.openai.com",
+    "chatgpt.com", "ws.chatgpt.com", "chatgpt.com.", "CHATGPT.COM",
+    "ab.chatgpt.com", "codex-cloud-environments.chatgpt.com",
+    "sora.chatgpt.com", "sora.com", "chat.com", "status.openai.com",
+    "cdn.oaistatic.com", "files.oaiusercontent.com", "ab.oaistatsig.com",
+    "cdn.openaimerge.com", "ab.ct.sendgrid.net", "api.intercom.io",
+    "js.intercomcdn.com", "cdn.workos.com", "forwarder.workos.com",
+    "frontend-apps-multi-region.workos.com", "setup.workos.com",
+    "images.workoscdn.com", "workos.imgix.net", "challenges.cloudflare.com",
+    "humb.apple.com", "js.stripe.com", "o207216.ingest.sentry.io",
+    "o33249.ingest.sentry.io", "rum.browser-intake-datadoghq.com",
+    "chat.openai.com.cdn.cloudflare.net", "openaiapi-site.azureedge.net",
+    "openaicom.imgix.net", "openai-api.arkoselabs.com",
+    "openaiassets.blob.core.windows.net",
+    "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net",
+    "openaicomproductionae4b.blob.core.windows.net",
+    "production-openaicom-storage.azureedge.net", "chatgpt.livekit.cloud",
+    "region.chatgpt.livekit.cloud", "region.host.livekit.cloud",
+    "region.turn.livekit.cloud", "api.statsig.com", "events.statsigapi.net",
+    "featuregates.org", "client-api.arkoselabs.com",
+)
 NODE = "\U0001f680 \u8282\u70b9\u9009\u62e9"
 AI = "\U0001f916 AI"
 MEDIA = "\U0001f3ac \u56fd\u5916\u6d41\u5a92\u4f53"
@@ -131,8 +160,9 @@ def fetch_text(url):
             time.sleep(attempt + 1)
 
 
-def first_match(rules, domain, process=None):
+def first_match(rules, domain, process=None, destination_ip=None):
     domain = domain.lower().rstrip(".")
+    address = ipaddress.ip_address(destination_ip) if destination_ip else None
     for policy, rule in rules:
         kind, _, value = rule.partition(",")
         value = value.split(",", 1)[0]
@@ -146,6 +176,9 @@ def first_match(rules, domain, process=None):
             return policy
         if kind == "DOMAIN-KEYWORD" and value in domain:
             return policy
+        if kind in ("IP-CIDR", "IP-CIDR6") and address:
+            if address in ipaddress.ip_network(value, strict=False):
+                return policy
     return None
 
 
@@ -199,6 +232,55 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(rulesets(block), expected)
         for _, source in expected:
             self.assertRegex(source, r"^\[\](PROCESS-NAME|DOMAIN|DOMAIN-SUFFIX),[^,]+$")
+
+    def test_openai_overrides_are_inlined_before_process_and_shared_rules(self):
+        block = self.text.split("; BEGIN OPENAI AI OVERRIDES\n", 1)[1]
+        block = block.split("; END OPENAI AI OVERRIDES", 1)[0]
+        expected = [(AI, "[]" + rule) for rule in active_lines(
+            OPENAI_OVERRIDES.read_text(encoding="utf-8-sig"))]
+        self.assertEqual(rulesets(block), expected)
+        end = max(self.rules.index(rule) for rule in expected)
+        for index, (_, source) in enumerate(self.rules):
+            if "PROCESS-NAME," in source or source.endswith((
+                    ",auth0.com", ",sentry", ",stripe.com", "/global.list",
+                    "/Apple.list", "/ChinaDomain.list")):
+                self.assertLess(end, index, source)
+        for _, source in expected:
+            self.assertRegex(source, r"^\[\](DOMAIN|DOMAIN-SUFFIX|IP-CIDR6?),")
+        self.assertFalse(any(policy == AI and "PROCESS-" in source
+                             for policy, source in self.rules))
+
+    def test_openai_domains_do_not_depend_on_remote_lists_or_process(self):
+        for domain in OPENAI_DOMAINS:
+            for process in (None, "Codex.exe", "codex", "ChatGPT.exe", "chrome.exe",
+                            "WeChat.exe", "com.android.vending", "qbittorrent.exe"):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.inline, domain, process), AI)
+
+    def test_openai_does_not_capture_unrelated_cloud_tenants(self):
+        for domain, expected in {
+            "unrelated.auth0.com": NODE, "api.stripe.com": NODE,
+            "unrelated.ingest.sentry.io": NODE,
+            "browser-intake-datadoghq.com": NODE,
+            "unrelated.blob.core.windows.net": FALLBACK,
+            "unrelated.azureedge.net": FALLBACK,
+            "unrelated.workos.com": FALLBACK,
+            "openai.com.example.org": FALLBACK,
+            "fakeopenai.com": FALLBACK,
+        }.items():
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.inline, domain), expected)
+
+    def test_voice_literal_ips_precede_process_fallbacks(self):
+        networks = [rule for rule in active_lines(OPENAI_OVERRIDES.read_text(encoding="utf-8"))
+                    if rule.startswith(("IP-CIDR,", "IP-CIDR6,"))]
+        self.assertTrue(networks)
+        for rule in networks:
+            self.assertTrue(rule.endswith(",no-resolve"), rule)
+            address = str(ipaddress.ip_network(rule.split(",")[1]).network_address)
+            with self.subTest(address=address):
+                self.assertEqual(first_match(self.inline, "", "WeChat.exe", address), AI)
+        self.assertEqual(first_match(self.inline, "", destination_ip="192.0.2.1"), FALLBACK)
 
     def test_loyalsoldier_sources_are_surge_rulesets(self):
         expected = {"direct.txt", "gfw.txt", "cncidr.txt"}
@@ -283,7 +365,7 @@ class ConfigTests(unittest.TestCase):
             "servd-anthropic-website.b-cdn.net": AI,
             "anthropic-com.ghost.io": AI,
             "anthropic.auth0.com": AI,
-            "challenges.cloudflare.com": NODE,
+            "challenges.cloudflare.com": AI,
             "www.recaptcha.net": NODE,
             "api.cloudflare.com": NODE,
             "d1.awsstatic.com": NODE,
@@ -428,7 +510,7 @@ class LiveRulesTests(unittest.TestCase):
             "gemini.google.com": AI,
             "generativelanguage.googleapis.com": AI,
             "accounts.google.com": AI,
-            "challenges.cloudflare.com": NODE,
+            "challenges.cloudflare.com": AI,
             "www.recaptcha.net": NODE,
             "api.cloudflare.com": NODE,
             "d1.awsstatic.com": NODE,
@@ -461,6 +543,28 @@ class LiveRulesTests(unittest.TestCase):
         for domain, expected in cases.items():
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.expanded, domain), expected)
+
+    def test_openai_domains_in_expanded_rules(self):
+        for domain in OPENAI_DOMAINS:
+            for process in (None, "Codex.exe", "WeChat.exe", "com.android.vending"):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.expanded, domain, process), AI)
+
+    def test_current_official_voice_ranges(self):
+        if not ONLINE:
+            self.skipTest("Use --online to compare with the current official voice JSON")
+        data = json.loads(fetch_text("https://openai.com/chatgpt-voice.json"))
+        self.assertTrue(data["prefixes"])
+        networks = [ipaddress.ip_network(rule.split(",")[1])
+                    for policy, rule in self.expanded
+                    if policy == AI and rule.startswith(("IP-CIDR,", "IP-CIDR6,"))]
+        for prefix in data["prefixes"]:
+            network = ipaddress.ip_network(prefix.get("ipv4Prefix") or prefix["ipv6Prefix"])
+            with self.subTest(network=str(network)):
+                self.assertTrue(any(network.version == item.version and network.subnet_of(item)
+                                    for item in networks), "Refresh OpenAI voice IP rules")
+                self.assertEqual(first_match(self.expanded, "", "WeChat.exe",
+                                             str(network.network_address)), AI)
 
     def test_domestic_process_precedes_public_stun(self):
         for process in ("WeChat.exe", "Weixin", "com.tencent.mm", "com.taobao.taobao"):
@@ -575,6 +679,12 @@ class GeneratedConfigTests(unittest.TestCase):
             name, kind, *_ = group.split("`")
             if kind == "select":
                 self.assertEqual(generated[name]["proxies"], select_members(group, nodes), name)
+
+    def test_openai_voice_no_resolve_is_preserved(self):
+        for rule in active_lines(OPENAI_OVERRIDES.read_text(encoding="utf-8")):
+            if rule.startswith(("IP-CIDR,", "IP-CIDR6,")):
+                kind, network, flag = rule.split(",")
+                self.assertIn(f"{kind},{network},{AI},{flag}", self.config["rules"])
 
 
 if __name__ == "__main__":
