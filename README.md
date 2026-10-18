@@ -8,7 +8,8 @@ still required.
 ## Routing Defaults
 
 - Known domestic applications, domestic AI services and domestic download CDNs
-  use DIRECT.
+  use DIRECT. Steam's China content CDNs are the exception: they follow the game
+  group like every other Steam domain (see below).
 - Overseas AI, social, streaming and game services use their respective groups.
 - OpenAI traffic is pinned inline to AI immediately after the LAN rules and
   before domestic process overrides. ChatGPT, Codex, API, authentication, file
@@ -42,6 +43,24 @@ still required.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
 - Games and unmatched traffic default to node selection. DIRECT remains an
   explicit option.
+- Game platform traffic uses one consistent exit, decided entirely by the game
+  group. Region-detection and download domains are pinned inline to the game
+  group ahead of every other match: `steamserver.net` (client CM/content
+  directory, absent from upstream Steam lists), `cm.steampowered.com`,
+  `steamcontent.com`, `steamusercontent.com`, `steamchina.com` (previously
+  hardwired DIRECT by SteamCN) and Epic's download CDN
+  `epicgames-download1.storage.googleapis.com` (otherwise claimed by Google
+  list's `googleapis.com` suffix). The SteamCN China download CDNs also target
+  the game group instead of a fixed DIRECT. Steam/Epic client processes
+  (`steam.exe`, `steamwebhelper.exe`, `EpicGamesLauncher.exe`, …) fall back to
+  the game group after all destination rules, catching IP-only CM and download
+  connections that no domain rule can match. With the game group on DIRECT,
+  Steam sees only the local IP and uses domestic CDNs; with it on a node,
+  Steam fully adopts that node's region. Without the process fallback those
+  unmatched connections drained to the final rule (node selection by default),
+  which is how Steam kept detecting a node IP and switching the download
+  region. Process rules need local process identification; on a router the
+  domain pins still apply.
 - aria2 and FDM follow destination rules, just like a browser. Selected BT
   clients use DIRECT only after known destination rules have been checked.
 - No advertising blocklist or unconditional unblocking allowlist is imported.
@@ -101,7 +120,9 @@ python -B tests/test_rules.py --generated-yaml path/to/converted.yaml -v
 Online and generated-YAML checks require PyYAML. `--cache-dir PATH` saves fetched
 rule sources for inspection. Tests cover rule order, destination/process routing,
 default group choices, OpenAI dependency/process precedence, literal voice IP
-routing, current official voice-range coverage (online), and generated proxy
+routing, current official voice-range coverage (online), game-platform exit
+consistency (region-detection domains, Epic download CDN precedence over the
+Google list, SteamCN CDNs and the client-process fallback), and generated proxy
 references. Validate converted YAML
 with your actual core too, for example `mihomo -t -f path/to/converted.yaml`.
 These checks do not establish real network reachability or DNS/WebRTC privacy.

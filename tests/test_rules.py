@@ -398,6 +398,43 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.inline, domain), AI)
 
+    def test_game_platform_traffic_is_locked_to_game_group(self):
+        # Region detection, CM and download CDNs must all leave through the game
+        # group so its selection fully decides which IP Steam/Epic can observe.
+        for domain in ("steamserver.net", "cm.steampowered.com", "cache1-hkg1.steamserver.net",
+                       "steamcontent.com", "steamusercontent.com", "steamchina.com",
+                       "epicgames-download1.storage.googleapis.com"):
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.inline, domain), GAMES)
+        block = self.position("[]DOMAIN-SUFFIX,steamserver.net")
+        for guard in ("/Google.list", "/gfw.txt", "/ChinaDomain.list", "/direct.txt", "[]FINAL"):
+            self.assertLess(block, self.position(guard), guard)
+        # The Epic download CDN must be claimed before Google.list's googleapis.com suffix.
+        self.assertLess(self.position("[]DOMAIN,epicgames-download1.storage.googleapis.com"),
+                        self.position("/Google.list"))
+        # Steam CN domains stay ahead of the main Steam list, now with the same target.
+        self.assertLess(self.position("/SteamCN.list"), self.position("/Steam.list"))
+        self.assertEqual(self.rules[self.position("/SteamCN.list")][0], GAMES)
+
+    def test_game_process_fallback_follows_game_group(self):
+        # IP-only CM/Download connections carry no domain; the process fallback is
+        # the only rule that can keep them on the game group's selected exit.
+        for process in ("steam.exe", "steamwebhelper.exe", "steam", "steamwebhelper",
+                        "EpicGamesLauncher.exe", "EpicWebHelper.exe"):
+            with self.subTest(process=process):
+                self.assertEqual(first_match(self.inline, "unmatched.example", process), GAMES)
+                self.assertEqual(first_match(self.inline, "", process, "203.0.113.8"), GAMES)
+        # Known destinations still follow their own rules instead of the game group.
+        self.assertEqual(first_match(self.inline, "api.openai.com", "steam.exe"), AI)
+        self.assertEqual(first_match(self.inline, "api.anthropic.com", "steamwebhelper.exe"), AI)
+        self.assertEqual(first_match(self.inline, "wechat.com", "steam.exe"), "DIRECT")
+        # The fallback runs only after domain rules, like the BT client fallback.
+        position = self.position("[]PROCESS-NAME,steam.exe")
+        self.assertGreater(position, self.position("/gfw.txt"))
+        self.assertLess(position, self.position("/ChinaCompanyIp.list"))
+        for process in ("aria2c.exe", "fdm.exe", "chrome.exe", "Codex.exe"):
+            self.assertNotEqual(first_match(self.inline, "unmatched.example", process), GAMES)
+
 
 class RulesetParsingTests(unittest.TestCase):
     def test_quanx_prefix(self):
@@ -596,9 +633,24 @@ class LiveRulesTests(unittest.TestCase):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.expanded, domain), expected)
 
+    def test_game_platform_region_and_download_domains_follow_game_group(self):
+        # Steam region detection (CM), the Epic download CDN under googleapis.com
+        # and the CN content CDNs must leave through the game group, not through
+        # node selection or a hardcoded DIRECT.
+        cases = {
+            "cm.steampowered.com": GAMES,
+            "cache1-hkg1.steamserver.net": GAMES,
+            "clientconfig.akam.steamstatic.com": GAMES,
+            "epicgames-download1.storage.googleapis.com": GAMES,
+            "dl.steam.clngaa.com": GAMES,
+            "cdn.steamcontent.com": GAMES,
+        }
+        for domain, expected in cases.items():
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.expanded, domain), expected)
+
     def test_domestic_downloads_stay_direct(self):
-        for domain in ("dl.google.com", "dl.steam.clngaa.com", "dl.steam.ksyna.com",
-                       "cdn.steamcontent.com", "csgo.wmsj.cn", "www.bilibili.com"):
+        for domain in ("dl.google.com", "www.bilibili.com"):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.expanded, domain), "DIRECT")
 
@@ -608,7 +660,7 @@ class LiveRulesTests(unittest.TestCase):
             "raw.githubusercontent.com": NODE,
             "archive.org": NODE,
             "steamcommunity.com": GAMES,
-            "dl.steam.clngaa.com": "DIRECT",
+            "dl.steam.clngaa.com": GAMES,
             "www.baidu.com": "DIRECT",
             "unmatched.example": FALLBACK,
         }
