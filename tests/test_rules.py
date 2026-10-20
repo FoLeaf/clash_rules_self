@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "acl4ssr-ai-chain-v2.ini"
 OVERRIDES = ROOT / "rules" / "cn-direct-override.list"
 OPENAI_OVERRIDES = ROOT / "rules" / "openai-ai.list"
+STEAM_DOWNLOADS = ROOT / "rules" / "steam-download-direct.list"
 # Independent acceptance cases from OpenAI's published network recommendations,
 # plus product endpoints and dedicated CDN/voice hosts. Do not derive from rules.
 OPENAI_DOMAINS = (
@@ -398,11 +399,11 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.inline, domain), AI)
 
-    def test_game_platform_traffic_is_locked_to_game_group(self):
-        # Region detection, CM and download CDNs must all leave through the game
-        # group so its selection fully decides which IP Steam/Epic can observe.
+    def test_game_platform_regional_traffic_follows_game_group(self):
+        # CM, store, community and UGC still leave through the game group so the
+        # group's selection decides which IP Steam observes and which region it uses.
         for domain in ("steamserver.net", "cm.steampowered.com", "cache1-hkg1.steamserver.net",
-                       "steamcontent.com", "steamusercontent.com", "steamchina.com",
+                       "steamusercontent.com", "steamchina.com",
                        "epicgames-download1.storage.googleapis.com"):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.inline, domain), GAMES)
@@ -416,14 +417,70 @@ class ConfigTests(unittest.TestCase):
         self.assertLess(self.position("/SteamCN.list"), self.position("/Steam.list"))
         self.assertEqual(self.rules[self.position("/SteamCN.list")][0], GAMES)
 
+    def test_steam_downloads_are_pinned_direct(self):
+        # With the game group on a node, downloads must still pull from mainland
+        # mirrors over the local ISP exit instead of the selected node.
+        for domain in ("steamcontent.com", "cache5-hkg1.steamcontent.com",
+                       "alibaba.cdn.steampipe.steamcontent.com",
+                       "cdn-ali.content.steamchina.com",
+                       "dl.steam.clngaa.com", "dl.steam.ksyna.com", "st.dl.eccdnx.com",
+                       "st.dl.bscstorage.net", "st.dl.pinyuncloud.com",
+                       "xz.pphimalayanrt.com", "csgo.wmsj.cn", "dota2.wmsj.cn",
+                       "steampowered.com.8686c.com", "steamstatic.com.8686c.com",
+                       "dl.file.cyngaa.com", "xz.sycontroller.com", "yif.gdtstream.com",
+                       "gstore.val.manlaxy.com", "files.steam.nsclouds.cn"):
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.inline, domain), "DIRECT")
+                # Downloads keep their direct exit regardless of the requesting process.
+                self.assertEqual(first_match(self.inline, domain, "steam.exe"), "DIRECT")
+        # The download pins must not capture store, community, UGC or CM traffic;
+        # those inline game rules stay reachable ahead of the aggregates.
+        download_suffixes = {source.split(",", 2)[-1]
+                             for rule in active_lines(STEAM_DOWNLOADS.read_text(encoding="utf-8"))
+                             if rule.startswith("DOMAIN-SUFFIX,")
+                             for source in ("[]" + rule,)}
+        for domain in ("store.steampowered.com", "steamcommunity.com",
+                       "steamusercontent.com", "steamserver.net", "cm.steampowered.com"):
+            with self.subTest(domain=domain):
+                self.assertFalse(any(domain == suffix or domain.endswith("." + suffix)
+                                     for suffix in download_suffixes), domain)
+        # CM, UGC and Steam China stay on the game group inline and precede the lists.
+        for source in ("[]DOMAIN-SUFFIX,steamserver.net", "[]DOMAIN-SUFFIX,cm.steampowered.com",
+                       "[]DOMAIN-SUFFIX,steamusercontent.com", "[]DOMAIN-SUFFIX,steamchina.com"):
+            self.assertIn((GAMES, source), self.rules, source)
+            self.assertLess(self.rules.index((GAMES, source)), self.position("/Steam.list"), source)
+
+    def test_steam_download_block_is_inlined_in_order(self):
+        block = self.text.split("; BEGIN STEAM DOWNLOAD DIRECT\n", 1)[1]
+        block = block.split("; END STEAM DOWNLOAD DIRECT", 1)[0]
+        expected = [("DIRECT", "[]" + rule) for rule in active_lines(
+            STEAM_DOWNLOADS.read_text(encoding="utf-8-sig"))]
+        self.assertEqual(rulesets(block), expected)
+        end = max(self.rules.index(rule) for rule in expected)
+        # The block must precede every Steam list and the generic direct rules,
+        # otherwise a node selection or DIRECT default would claim these hosts first.
+        for suffix in ("/SteamCN.list", "/Steam.list", "/ChinaDomain.list", "/direct.txt",
+                       "[]PROCESS-NAME,steam.exe", "[]FINAL"):
+            self.assertLess(end, self.position(suffix), suffix)
+        for _, source in expected:
+            self.assertRegex(source, r"^\[\](DOMAIN|DOMAIN-SUFFIX),[^,]+$")
+        # No download host may be claimed by the game group inline rules.
+        games_inline = {source for policy, source in self.rules
+                        if policy == GAMES and source.startswith("[]")}
+        for _, source in expected:
+            self.assertNotIn(source, games_inline)
+
     def test_game_process_fallback_follows_game_group(self):
-        # IP-only CM/Download connections carry no domain; the process fallback is
-        # the only rule that can keep them on the game group's selected exit.
+        # IP-only CM connections carry no domain; the process fallback is the only
+        # rule that can keep them on the game group's selected exit.
         for process in ("steam.exe", "steamwebhelper.exe", "steam", "steamwebhelper",
                         "EpicGamesLauncher.exe", "EpicWebHelper.exe"):
             with self.subTest(process=process):
                 self.assertEqual(first_match(self.inline, "unmatched.example", process), GAMES)
                 self.assertEqual(first_match(self.inline, "", process, "203.0.113.8"), GAMES)
+        # Download domains are matched by destination first, before the fallback.
+        self.assertEqual(first_match(self.inline, "", "steam.exe", "203.0.113.8"), GAMES)
+        self.assertEqual(first_match(self.inline, "dl.steam.clngaa.com", "steam.exe"), "DIRECT")
         # Known destinations still follow their own rules instead of the game group.
         self.assertEqual(first_match(self.inline, "api.openai.com", "steam.exe"), AI)
         self.assertEqual(first_match(self.inline, "api.anthropic.com", "steamwebhelper.exe"), AI)
@@ -633,21 +690,35 @@ class LiveRulesTests(unittest.TestCase):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.expanded, domain), expected)
 
-    def test_game_platform_region_and_download_domains_follow_game_group(self):
-        # Steam region detection (CM), the Epic download CDN under googleapis.com
-        # and the CN content CDNs must leave through the game group, not through
-        # node selection or a hardcoded DIRECT.
+    def test_game_platform_regional_domains_follow_game_group(self):
+        # Steam region detection (CM) and the Epic download CDN under googleapis.com
+        # must leave through the game group, not through node selection or DIRECT.
         cases = {
             "cm.steampowered.com": GAMES,
             "cache1-hkg1.steamserver.net": GAMES,
             "clientconfig.akam.steamstatic.com": GAMES,
+            "store.steampowered.com": GAMES,
+            "steamcommunity.com": GAMES,
             "epicgames-download1.storage.googleapis.com": GAMES,
-            "dl.steam.clngaa.com": GAMES,
-            "cdn.steamcontent.com": GAMES,
+            # Overseas partner content servers stay on the game group: pinning them
+            # DIRECT would slow downloads down from mainland China.
+            "steampipe.akamaized.net": GAMES,
+            "f3b7q2p3.ssl.hwcdn.net": GAMES,
         }
         for domain, expected in cases.items():
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.expanded, domain), expected)
+
+    def test_steam_download_domains_stay_direct_after_lists_expand(self):
+        # Expanded upstream lists must not reclaim Steam download hosts for the
+        # game group; the inline DIRECT pins run before SteamCN and Steam.
+        for domain in ("dl.steam.clngaa.com", "cdn.steamcontent.com",
+                       "cache1-hkg1.steamcontent.com",
+                       "st.dl.eccdnx.com", "xz.pphimalayanrt.com",
+                       "steamcontent.tnkjmec.com", "cdn-ali.content.steamchina.com",
+                       "files.steam.nsclouds.cn"):
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.expanded, domain), "DIRECT")
 
     def test_domestic_downloads_stay_direct(self):
         for domain in ("dl.google.com", "www.bilibili.com"):
@@ -660,7 +731,7 @@ class LiveRulesTests(unittest.TestCase):
             "raw.githubusercontent.com": NODE,
             "archive.org": NODE,
             "steamcommunity.com": GAMES,
-            "dl.steam.clngaa.com": GAMES,
+            "dl.steam.clngaa.com": "DIRECT",
             "www.baidu.com": "DIRECT",
             "unmatched.example": FALLBACK,
         }

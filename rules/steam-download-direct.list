@@ -1,0 +1,30 @@
+# Steam 内容下载固定直连，不随游戏平台组切换到节点。
+# 主 INI 的 STEAM DOWNLOAD DIRECT 区块内联同一份规则，须先于游戏平台组、SteamCN、
+# Steam 列表与通用国内规则。下载从大陆镜像与 Valve 内容缓存取包，走本机原出口 IP。
+# 商店、社区、UGC、CM 与游戏联机不在本列表，仍跟随游戏平台组。
+
+# Valve 内容缓存（cache*-<区域>.steamcontent.com）与蒸汽平台内容 CDN
+DOMAIN-SUFFIX,steamcontent.com
+DOMAIN-SUFFIX,content.steamchina.com
+# 国内 SteamPipe 镜像，SteamCN 中写作 steampipe.steamcontent.tnkjmec.com
+DOMAIN-SUFFIX,steamcontent.tnkjmec.com
+
+# Steam 国内下载镜像
+DOMAIN-SUFFIX,clngaa.com
+DOMAIN-SUFFIX,ksyna.com
+DOMAIN-SUFFIX,eccdnx.com
+DOMAIN-SUFFIX,bscstorage.net
+DOMAIN-SUFFIX,pinyuncloud.com
+DOMAIN-SUFFIX,pphimalayanrt.com
+DOMAIN-SUFFIX,wmsjsteam.com
+DOMAIN-SUFFIX,steampowered.com.8686c.com
+DOMAIN-SUFFIX,steamstatic.com.8686c.com
+DOMAIN,csgo.wmsj.cn
+DOMAIN,dota2.wmsj.cn
+
+# 客户端实际出现的 CDN 跳转目标；上游直连列表可能未收录，这里保证不落回游戏组
+DOMAIN-SUFFIX,cyngaa.com
+DOMAIN-SUFFIX,sycontroller.com
+DOMAIN-SUFFIX,gdtstream.com
+DOMAIN-SUFFIX,manlaxy.com
+DOMAIN-SUFFIX,steam.nsclouds.cn
