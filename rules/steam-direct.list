@@ -1,7 +1,13 @@
-# Steam 内容下载固定直连，不随游戏平台组切换到节点。
-# 主 INI 的 STEAM DOWNLOAD DIRECT 区块内联同一份规则，须先于游戏平台组、SteamCN、
-# Steam 列表与通用国内规则。下载从大陆镜像与 Valve 内容缓存取包，走本机原出口 IP。
-# 商店、社区、UGC、CM 与游戏联机不在本列表，仍跟随游戏平台组。
+# Steam 启动定位与内容下载固定直连，不随游戏平台组切换到节点。
+# 主 INI 的 STEAM DIRECT 区块内联同一份规则，须先于游戏平台组、SteamCN、
+# Steam 列表与通用国内规则。CM 与 IP 探测直连后，Valve 看到的出口是本机原 IP，
+# 下载区域按真实位置判定；下载也从大陆镜像与 Valve 内容缓存取包。
+# 商店、社区、UGC 与游戏联机不在本列表，仍跟随游戏平台组。
+
+# CM 连接、IP 探测（ipv6check）与内容发现（discovery/dist）
+# 这组主机上报的 external address 直接决定 Steam 认定的地区，必须直连
+DOMAIN-SUFFIX,steamserver.net
+DOMAIN-SUFFIX,cm.steampowered.com
 
 # Valve 内容缓存（cache*-<区域>.steamcontent.com）与蒸汽平台内容 CDN
 DOMAIN-SUFFIX,steamcontent.com

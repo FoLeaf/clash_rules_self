@@ -8,8 +8,8 @@ still required.
 ## Routing Defaults
 
 - Known domestic applications, domestic AI services and domestic download CDNs
-  use DIRECT. Steam's content download hosts are also DIRECT and stay that way
-  when the game group is switched to a node (see below).
+  use DIRECT. Steam's location-detection and download hosts are also DIRECT and
+  stay that way when the game group is switched to a node (see below).
 - Overseas AI, social, streaming and game services use their respective groups.
 - OpenAI traffic is pinned inline to AI immediately after the LAN rules and
   before domestic process overrides. ChatGPT, Codex, API, authentication, file
@@ -43,42 +43,36 @@ still required.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
 - Games and unmatched traffic default to node selection. DIRECT remains an
   explicit option.
-- Game platform traffic follows the game group, with one exception: Steam game
-  downloads stay DIRECT. The game group decides which exit Steam's connection
-  manager, store, community, UGC and multiplayer traffic use, so its selection
-  sets the IP Steam observes and therefore its region. Download hosts are pinned
-  DIRECT inline before every Steam list and the generic direct rules:
+- Steam's location detection and content downloads stay DIRECT even when the
+  game group is switched to a node; everything else about the game group still
+  follows it. At startup Steam fetches
+  `http://ipv6check-http.steamserver.net/` and reports the external address it
+  sees, and it discovers CMs through `steamserver.net`; when those followed a
+  node, the reported address was the node's and Steam re-regionized to it. Both
+  are pinned DIRECT inline before every Steam list and the generic direct rules,
+  together with `cm.steampowered.com` and the download hosts:
   `steamcontent.com` (including `cache*-<region>.steamcontent.com`),
   `content.steamchina.com`, `steamcontent.tnkjmec.com`, the mainland mirrors
   (`clngaa.com`, `ksyna.com`, `eccdnx.com`, `bscstorage.net`,
   `pinyuncloud.com`, `pphimalayanrt.com`, `wmsjsteam.com`, the two
   `8686c.com` Steam hosts) and the CDN redirect targets seen in client logs
   (`cyngaa.com`, `sycontroller.com`, `gdtstream.com`, `manlaxy.com`,
-  `steam.nsclouds.cn`). Package bodies therefore come from mainland mirrors over
+  `steam.nsclouds.cn`). Valve therefore sees the local ISP address, picks the
+  nearest mainland region, and package bodies come from mainland mirrors over
   the local ISP exit instead of consuming the selected node's bandwidth.
   Overseas partner CDNs in the Steam list (`steampipe*.akamaized.net`,
   `hwcdn.net`) are deliberately left out so they keep following the game group.
-  The canonical source is
-  [`rules/steam-download-direct.list`](rules/steam-download-direct.list); its
-  rules must stay identical to the marked block in the INI.
-- `steamserver.net` (client CM/content directory, absent from upstream Steam
-  lists), `cm.steampowered.com`, `steamusercontent.com`, `steamchina.com` and
-  Epic's download CDN `epicgames-download1.storage.googleapis.com` (otherwise
-  claimed by Google list's `googleapis.com` suffix) are pinned inline to the
-  game group ahead of every other match. Steam/Epic client processes
-  (`steam.exe`, `steamwebhelper.exe`, `EpicGamesLauncher.exe`, …) fall back to
-  the game group after all destination rules, catching IP-only CM connections
-  that no domain rule can match. Without that fallback those unmatched
-  connections drained to the final rule (node selection by default), which is
-  how Steam kept detecting a node IP and switching the download region. Process
-  rules need local process identification; on a router the domain pins still
-  apply.
-- With the game group on a node, Steam's CM exit is that node, so Steam asks for
-  that node's content servers. The download pins then keep the game bytes on
-  mainland CDNs, which only serve Chinese regions. Pin the download region in
-  Steam itself (Settings → Downloads → Download region) to a mainland entry so
-  the requested content servers match where the downloads actually leave from.
-  With the game group on DIRECT everything already matches the local network.
+  The canonical source is [`rules/steam-direct.list`](rules/steam-direct.list);
+  its rules must stay identical to the marked block in the INI.
+- `steamusercontent.com`, `steamchina.com` and Epic's download CDN
+  `epicgames-download1.storage.googleapis.com` (otherwise claimed by Google
+  list's `googleapis.com` suffix) are pinned inline to the game group ahead of
+  every other match. Steam/Epic client processes (`steam.exe`,
+  `steamwebhelper.exe`, `EpicGamesLauncher.exe`, …) fall back to the game group
+  after all destination rules, catching IP-only connections that no domain rule
+  can match; known destinations such as the Steam location and download hosts
+  are matched first and keep their DIRECT exit. Process rules need local process
+  identification; on a router the domain pins still apply.
 - aria2 and FDM follow destination rules, just like a browser. Selected BT
   clients use DIRECT only after known destination rules have been checked.
 - No advertising blocklist or unconditional unblocking allowlist is imported.
@@ -139,9 +133,9 @@ Online and generated-YAML checks require PyYAML. `--cache-dir PATH` saves fetche
 rule sources for inspection. Tests cover rule order, destination/process routing,
 default group choices, OpenAI dependency/process precedence, literal voice IP
 routing, current official voice-range coverage (online), game-platform exit
-handling (region-detection domains and the client-process fallback on the game
-group, Epic download CDN precedence over the Google list, Steam download hosts
-pinned DIRECT and reachable in that order after the remote lists expand), and
-generated proxy references. Validate converted YAML
+handling (Steam location and download hosts pinned DIRECT ahead of the Steam
+lists, store/community/UGC and Epic on the game group, Epic download CDN
+precedence over the Google list, the client-process fallback), and generated
+proxy references. Validate converted YAML
 with your actual core too, for example `mihomo -t -f path/to/converted.yaml`.
 These checks do not establish real network reachability or DNS/WebRTC privacy.
