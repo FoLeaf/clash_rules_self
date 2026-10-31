@@ -42,15 +42,18 @@ still required.
   telemetry domains (other sentry.io ingest and datadog hosts) stay on node
   selection by design; Cloudflare challenges and the OpenAI dependency exceptions
   above use AI. Align the AI and node-selection exits if login challenges loop.
-- Pinned AI domains get a QUIC fallback immediately after the Anthropic block:
-  `AND((NETWORK,UDP),(DST-PORT,443),(DOMAIN…))` rules REJECT UDP 443 for the same
-  domain set. On 2026-10-31 Mihomo logs showed claude.ai TCP exiting through
-  `🤖 AI[🇺🇸 US-PPFLIGHT]` (US exit) while Firefox HTTP/3 traffic
-  (`claude.com:443` UDP) matched no usable rule and fell through to DIRECT, so the
-  page still loaded from the Chinese IP and Anthropic redirected to
-  `app-unavailable-in-region`. The reject forces browsers back to TCP, which the AI
-  rules already proxy; when the selected AI node supports UDP, QUIC is proxied and
-  the reject never triggers. Logic rules need a Mihomo (meta) core.
+- QUIC fallback for the pinned AI domains cannot be expressed in this INI: the
+  client converter keeps only `TYPE,VALUE` from inline rules (a third field such
+  as `no-resolve` is dropped, and on 2026-10-31 an inline
+  `AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,openai.com))` rule was
+  truncated to `AND,((NETWORK,REJECT`, failing the core config check). The
+  subscription nodes also ship without `udp=true`, so browser HTTP/3 fell through
+  every rule to DIRECT and claude.ai redirected to `app-unavailable-in-region`
+  even while its TCP traffic exited through `🤖 AI[🇺🇸 US-PPFLIGHT]` (US). Inject
+  [`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js) as a
+  Mihomo Party override instead: it appends
+  `AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN…)),REJECT` rules right after the
+  Anthropic pins, forcing browsers back to TCP when the AI node cannot carry UDP.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
 - Games and unmatched traffic default to node selection. DIRECT remains an
   explicit option.
@@ -263,13 +266,17 @@ stunprotocol.org 公共 STUN 主机改为同走 AI，减少网页 HTTPS 与 WebR
 进程的路由器上不生效。
 
 2026-10-31 复现并修复了地区跳转的一个具体成因：连接日志显示 claude.ai 的 TCP 请求
-已由 `🤖 AI[🇺🇸 US-PPFLIGHT]`（美国出口）代理，但该节点不支持 UDP，Firefox 的
-HTTP/3（QUIC，UDP 443）连接穿透全部规则回落为国内直连，页面随后仍以中国 IP 完成地区
-判定并跳转 `app-unavailable-in-region`。模板已在 Anthropic 锁定块之后为同一组 AI
-域名追加 UDP 443 REJECT 兜底：节点支持 UDP 时 QUIC 仍走 AI，不支持时浏览器回落
-TCP，由既有 AI 规则代理。订阅刷新生效前，可临时在浏览器关闭 HTTP/3（Firefox 为
-`network.http.http3.enable=false`，Chromium 系浏览器在 flags 中禁用 QUIC），或为
-AI 分组改选支持 UDP 的节点。
+已由 `🤖 AI[🇺🇸 US-PPFLIGHT]`（美国出口）代理，但订阅节点均未启用 UDP（VLESS 链接
+没有 `udp=true`），Firefox 的 HTTP/3（QUIC，UDP 443）连接穿透全部规则回落为国内
+直连，页面随后仍以中国 IP 完成地区判定并跳转 `app-unavailable-in-region`。
+UDP 443 REJECT 兜底写不进本 INI：客户端转换器对内联规则只保留 `TYPE,VALUE` 两段
+（同日实测 `AND,((NETWORK,UDP),…)` 被截断为 `AND,((NETWORK,REJECT`，内联
+`no-resolve` 也会被丢弃），逻辑规则须以 Clash Party 覆写脚本注入，见
+[`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js)。该脚本把
+`AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN…)),REJECT` 追加在 Anthropic 锁定块之后：
+节点启用 UDP 后 QUIC 照常走 AI，未启用时 UDP 443 被拒绝，浏览器回落 TCP 并由既有
+AI 规则代理。覆写生效前，可临时在浏览器关闭 HTTP/3（Firefox 为
+`network.http.http3.enable=false`，Chromium 系浏览器在 flags 中禁用 QUIC）。
 
 若检测结果仍显示 Claude 使用代理出口、WebRTC/UDP 却使用国内出口，按以下顺序
 检查客户端；仅更新这个 INI 不足以证明泄漏已修复：

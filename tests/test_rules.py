@@ -23,6 +23,7 @@ CONFIG = ROOT / "acl4ssr-ai-chain-v2.ini"
 OVERRIDES = ROOT / "rules" / "cn-direct-override.list"
 OPENAI_OVERRIDES = ROOT / "rules" / "openai-ai.list"
 STEAM_DIRECT = ROOT / "rules" / "steam-direct.list"
+QUIC_OVERRIDE = ROOT / "overrides" / "claude-quic-reject.js"
 # Independent acceptance cases from OpenAI's published network recommendations,
 # plus product endpoints and dedicated CDN/voice hosts. Do not derive from rules.
 OPENAI_DOMAINS = (
@@ -413,31 +414,44 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(unrelated=domain):
                 self.assertNotEqual(first_match(self.inline, domain), AI)
 
-    def test_ai_quic_udp_reject_fallback(self):
-        quic = [(policy, rule) for policy, rule in self.inline
-                if rule.startswith("AND,((NETWORK,UDP),(DST-PORT,443),(")]
-        required = ["openai.com", "chatgpt.com", "chat.com", "sora.com",
+    def test_inline_rules_survive_client_conversion(self):
+        # Clash Party's converter keeps only TYPE,VALUE from an inline rule and
+        # appends the policy: a third field (no-resolve) is dropped, and on
+        # 2026-10-31 an inline AND rule was truncated to "AND,((NETWORK,REJECT".
+        # Logic rules therefore ship as the QUIC override script instead.
+        for policy, rule in self.inline:
+            fields = rule.split(",")
+            self.assertLessEqual(len(fields), 3, rule)
+            self.assertNotIn(fields[0], ("AND", "OR", "NOT"), rule)
+
+    def test_quic_override_covers_pinned_ai_domains(self):
+        text = QUIC_OVERRIDE.read_text(encoding="utf-8-sig")
+        suffixes = ["openai.com", "chatgpt.com", "chat.com", "sora.com",
                     "oaistatic.com", "oaiusercontent.com", "oaistatsig.com",
-                    "openaimerge.com", "cdn.platform.openai.com",
-                    "claude.ai", "claude.com", "claude.app", "claude.dev",
-                    "claude.new", "claude.site", "anthropic.com",
+                    "openaimerge.com", "claude.ai", "claude.com", "claude.app",
+                    "claude.dev", "claude.new", "claude.site", "anthropic.com",
                     "claudeusercontent.com", "claudemcpclient.com",
-                    "claudemcpcontent.com", "anthropic.auth0.com",
-                    "anthropic.com.cdn.cloudflare.net",
-                    "servd-anthropic-website.b-cdn.net", "anthropic-com.ghost.io"]
-        self.assertEqual(len(quic), len(required))
-        covered = []
-        for policy, rule in quic:
-            self.assertEqual(policy, "REJECT", rule)
-            match = re.search(r",\((DOMAIN(?:-SUFFIX)?),([^)]+)\)\)$", rule)
-            self.assertIsNotNone(match, rule)
-            covered.append(match.group(2))
-        self.assertEqual(sorted(covered), sorted(required))
-        last_pin = self.position("[]DOMAIN,anthropic-com.ghost.io")
-        first_process = self.position("[]PROCESS-NAME,com.zhiliaoapp.musically")
-        quic_indexes = [i for i, (_, source) in enumerate(self.rules)
-                        if source.startswith("[]AND,((NETWORK,UDP)")]
-        self.assertTrue(all(last_pin < i < first_process for i in quic_indexes))
+                    "claudemcpcontent.com"]
+        exact = ["cdn.platform.openai.com", "anthropic.auth0.com",
+                 "anthropic.com.cdn.cloudflare.net",
+                 "servd-anthropic-website.b-cdn.net", "anthropic-com.ghost.io"]
+        for name, expected in (("suffixes", suffixes), ("exact", exact)):
+            block = re.search(name + r"\s*=\s*\[([^\]]*)\]", text)
+            self.assertIsNotNone(block, name)
+            self.assertEqual(sorted(re.findall(r'"([^"]+)"', block.group(1))),
+                             sorted(expected), name)
+        # Both map templates must produce AND/REJECT rules; the domain sets
+        # themselves are already compared element-wise above.
+        templates = re.findall(
+            r"AND,\(\(NETWORK,UDP\),\(DST-PORT,443\),\(DOMAIN(?:-SUFFIX)?,\$\{d\}\)\),REJECT",
+            text)
+        self.assertEqual(len(templates), 2)
+        self.assertIn('r.startsWith("DOMAIN,anthropic-com.ghost.io,")', text)
+        for domain in [*suffixes, *exact]:
+            if domain == "cdn.platform.openai.com":
+                continue  # covered by the aggregated AI list, not inline
+            with self.subTest(domain=domain):
+                self.assertEqual(first_match(self.inline, domain), AI)
 
     def test_public_stun_uses_ai_group_with_domestic_process_exceptions(self):
         for domain in ("stun.l.google.com", "stun1.l.google.com", "stun2.l.google.com",
