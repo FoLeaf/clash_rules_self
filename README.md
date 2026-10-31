@@ -42,6 +42,15 @@ still required.
   telemetry domains (other sentry.io ingest and datadog hosts) stay on node
   selection by design; Cloudflare challenges and the OpenAI dependency exceptions
   above use AI. Align the AI and node-selection exits if login challenges loop.
+- Pinned AI domains get a QUIC fallback immediately after the Anthropic block:
+  `AND((NETWORK,UDP),(DST-PORT,443),(DOMAIN…))` rules REJECT UDP 443 for the same
+  domain set. On 2026-10-31 Mihomo logs showed claude.ai TCP exiting through
+  `🤖 AI[🇺🇸 US-PPFLIGHT]` (US exit) while Firefox HTTP/3 traffic
+  (`claude.com:443` UDP) matched no usable rule and fell through to DIRECT, so the
+  page still loaded from the Chinese IP and Anthropic redirected to
+  `app-unavailable-in-region`. The reject forces browsers back to TCP, which the AI
+  rules already proxy; when the selected AI node supports UDP, QUIC is proxied and
+  the reject never triggers. Logic rules need a Mihomo (meta) core.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
 - Games and unmatched traffic default to node selection. DIRECT remains an
   explicit option.
@@ -252,6 +261,15 @@ stunprotocol.org 公共 STUN 主机改为同走 AI，减少网页 HTTPS 与 WebR
 代理分组的情况。共享 STUN 无法识别来自哪个网页，因此使用这些主机的其他应用也
 会受影响；国内应用仍保留更靠前的 STUN 进程直连例外。这些例外在不能识别下游
 进程的路由器上不生效。
+
+2026-10-31 复现并修复了地区跳转的一个具体成因：连接日志显示 claude.ai 的 TCP 请求
+已由 `🤖 AI[🇺🇸 US-PPFLIGHT]`（美国出口）代理，但该节点不支持 UDP，Firefox 的
+HTTP/3（QUIC，UDP 443）连接穿透全部规则回落为国内直连，页面随后仍以中国 IP 完成地区
+判定并跳转 `app-unavailable-in-region`。模板已在 Anthropic 锁定块之后为同一组 AI
+域名追加 UDP 443 REJECT 兜底：节点支持 UDP 时 QUIC 仍走 AI，不支持时浏览器回落
+TCP，由既有 AI 规则代理。订阅刷新生效前，可临时在浏览器关闭 HTTP/3（Firefox 为
+`network.http.http3.enable=false`，Chromium 系浏览器在 flags 中禁用 QUIC），或为
+AI 分组改选支持 UDP 的节点。
 
 若检测结果仍显示 Claude 使用代理出口、WebRTC/UDP 却使用国内出口，按以下顺序
 检查客户端；仅更新这个 INI 不足以证明泄漏已修复：

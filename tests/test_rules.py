@@ -390,7 +390,7 @@ class ConfigTests(unittest.TestCase):
                       "/global.list", "/Google.list", "/ChinaDomain.list", "[]FINAL"):
             self.assertLess(block, self.position(guard), guard)
         anthropic_rules = [(policy, rule) for policy, rule in self.inline
-                           if "anthropic" in rule or "claude" in rule]
+                           if policy == AI and ("anthropic" in rule or "claude" in rule)]
         self.assertEqual(len(anthropic_rules), 14)
         for policy, rule in anthropic_rules:
             self.assertEqual(policy, AI, rule)
@@ -412,6 +412,32 @@ class ConfigTests(unittest.TestCase):
         for domain in ("claude.ai.example.org", "fakeclaude.ai", "unrelated.auth0.com"):
             with self.subTest(unrelated=domain):
                 self.assertNotEqual(first_match(self.inline, domain), AI)
+
+    def test_ai_quic_udp_reject_fallback(self):
+        quic = [(policy, rule) for policy, rule in self.inline
+                if rule.startswith("AND,((NETWORK,UDP),(DST-PORT,443),(")]
+        required = ["openai.com", "chatgpt.com", "chat.com", "sora.com",
+                    "oaistatic.com", "oaiusercontent.com", "oaistatsig.com",
+                    "openaimerge.com", "cdn.platform.openai.com",
+                    "claude.ai", "claude.com", "claude.app", "claude.dev",
+                    "claude.new", "claude.site", "anthropic.com",
+                    "claudeusercontent.com", "claudemcpclient.com",
+                    "claudemcpcontent.com", "anthropic.auth0.com",
+                    "anthropic.com.cdn.cloudflare.net",
+                    "servd-anthropic-website.b-cdn.net", "anthropic-com.ghost.io"]
+        self.assertEqual(len(quic), len(required))
+        covered = []
+        for policy, rule in quic:
+            self.assertEqual(policy, "REJECT", rule)
+            match = re.search(r",\((DOMAIN(?:-SUFFIX)?),([^)]+)\)\)$", rule)
+            self.assertIsNotNone(match, rule)
+            covered.append(match.group(2))
+        self.assertEqual(sorted(covered), sorted(required))
+        last_pin = self.position("[]DOMAIN,anthropic-com.ghost.io")
+        first_process = self.position("[]PROCESS-NAME,com.zhiliaoapp.musically")
+        quic_indexes = [i for i, (_, source) in enumerate(self.rules)
+                        if source.startswith("[]AND,((NETWORK,UDP)")]
+        self.assertTrue(all(last_pin < i < first_process for i in quic_indexes))
 
     def test_public_stun_uses_ai_group_with_domestic_process_exceptions(self):
         for domain in ("stun.l.google.com", "stun1.l.google.com", "stun2.l.google.com",
