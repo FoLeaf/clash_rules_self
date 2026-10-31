@@ -351,9 +351,9 @@ class ConfigTests(unittest.TestCase):
             "r3---sn-ni5e6n7z.xn--ngstr-lra8j.com": NODE,
             "android.googleapis.com": NODE,
             "storage.googleapis.com": NODE,
-            "stun.l.google.com": NODE,
-            "stun.cloudflare.com": NODE,
-            "global.stun.twilio.com": NODE,
+            "stun.l.google.com": AI,
+            "stun.cloudflare.com": AI,
+            "global.stun.twilio.com": AI,
             "claude.ai": AI,
             "www.claude.com": AI,
             "api.anthropic.com": AI,
@@ -398,6 +398,30 @@ class ConfigTests(unittest.TestCase):
                        "api.anthropic.com", "statsig.anthropic.com"):
             with self.subTest(domain=domain):
                 self.assertEqual(first_match(self.inline, domain), AI)
+
+    def test_anthropic_destinations_precede_domestic_process_overrides(self):
+        # An embedded browser must keep the same route as the standalone client.
+        for domain in ("claude.ai", "claude.ai.", "CLAUDE.AI", "api.anthropic.com",
+                       "console.anthropic.com", "statsig.anthropic.com",
+                       "files.claudeusercontent.com", "anthropic.auth0.com",
+                       "anthropic.com.cdn.cloudflare.net", "challenges.cloudflare.com"):
+            for process in (None, "firefox.exe", "WeChat.exe", "QQ.exe",
+                            "com.tencent.mm", "com.taobao.taobao", "com.android.vending"):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.inline, domain, process), AI)
+        for domain in ("claude.ai.example.org", "fakeclaude.ai", "unrelated.auth0.com"):
+            with self.subTest(unrelated=domain):
+                self.assertNotEqual(first_match(self.inline, domain), AI)
+
+    def test_public_stun_uses_ai_group_with_domestic_process_exceptions(self):
+        for domain in ("stun.l.google.com", "stun1.l.google.com", "stun2.l.google.com",
+                       "stun3.l.google.com", "stun4.l.google.com", "stun.cloudflare.com",
+                       "global.stun.twilio.com", "stun.stunprotocol.org"):
+            for process in (None, "firefox.exe", "chrome.exe"):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.inline, domain, process), AI)
+            with self.subTest(domestic=domain):
+                self.assertEqual(first_match(self.inline, domain, "WeChat.exe"), "DIRECT")
 
     def test_game_platform_non_steam_traffic_follows_game_group(self):
         # Store, community, UGC, Steam China, Epic and the console platforms keep
@@ -621,8 +645,8 @@ class LiveRulesTests(unittest.TestCase):
             "android.googleapis.com": NODE,
             "storage.googleapis.com": NODE,
             "play.googleapis.com": NODE,
-            "stun.l.google.com": NODE,
-            "stun.cloudflare.com": NODE,
+            "stun.l.google.com": AI,
+            "stun.cloudflare.com": AI,
             "unrelated.auth0.com": NODE,
             "dl.google.com": "DIRECT",
             "www.youtube.com": MEDIA,

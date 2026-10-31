@@ -35,7 +35,9 @@ still required.
   other Claude product domains, anthropic.com with all its subdomains
   (API, console, statsig telemetry), plus dedicated third-party hostnames such
   as anthropic.auth0.com and anthropic.com.cdn.cloudflare.net are matched
-  inline before shared SaaS fallbacks and the aggregated AI list. Upstream list
+  inline before domestic process overrides, shared SaaS fallbacks and the
+  aggregated AI list. Embedded browsers therefore use AI for these destinations
+  even inside an otherwise DIRECT domestic application. Upstream list
   changes cannot move Anthropic traffic out of the AI group. Multi-tenant
   telemetry domains (other sentry.io ingest and datadog hosts) stay on node
   selection by design; Cloudflare challenges and the OpenAI dependency exceptions
@@ -101,6 +103,124 @@ Nodes or groups created later by a client override are not visible to
 subconverter's filters. That override must both create the chain and add its
 name to the relevant group's proxy list.
 
+## Google Fonts Direct-Path Observation
+
+The upstream `GoogleCN.list` includes `fonts.googleapis.com` and
+`fonts.gstatic.com`, and this template routes the full list to `DIRECT` before
+the general Google list. On 2026-10-28, Mihomo repeatedly logged
+`fonts.googleapis.com:443` matching `RuleSet/googlecn_27` and dialing `DIRECT`;
+IPv4 attempts to Google addresses such as `172.217.75.95`, `142.251.41.10`,
+and `142.251.215.170` timed out. IPv6 attempts failed because the address was
+not valid in the local network context. A fresh PC-side curl through the local
+Mihomo proxy returned HTTP 000 after about five seconds for Fonts, while the
+same core returned HTTP 200 for `www.baidu.com` in about 0.1 seconds; Mihomo
+logged both as `DIRECT` (`googlecn_27` and `chinadomain_40`, respectively).
+The route policy is working; the Fonts host is being resolved to an address
+that the PC cannot reach over its direct campus path.
+
+During a Fonts request, the core's outbound TCP sockets used local address
+`10.16.6.141`, which belongs to the physical Realtek `以太网 3` adapter, not
+the Mihomo virtual adapter. That lowers the likelihood that TUN selected the
+virtual adapter as its physical egress. The user reports a stronger same-
+network comparison on the phone: with the phone connected to the same router
+Wi-Fi, Fonts opens with Clash off, fails in Clash TUN mode using Rules/Direct,
+and opens again with TUN off and system proxy mode on. On the PC, the user
+initially reported that Rules-mode system-proxy mode opened Fonts, but a later
+fresh Firefox private-window request returned 502. Its log showed
+`127.0.0.1` ingress, `RuleSet/googlecn_27 → DIRECT`, and timeouts to
+`142.251.215.74` and `142.251.214.106`; the initial success may have been
+transient or served from the normal browser cache. Native curl with both TUN
+and system proxy off timed out after five seconds. A second curl request
+through the local mixed port `127.0.0.1:7890`, also with TUN and system proxy
+off, was logged as
+`DIRECT` via `RuleSet/googlecn_27` and timed out to `142.251.215.74:443`. Thus
+the direct route through Mihomo fails outside TUN as well. The current PC
+state has since returned to TUN on and system proxy off. Windows
+Firewall profiles are currently
+disabled. 360 Safe Guard Lite has several running kernel drivers, including
+`360netmon`, although its UI process was not running; no matching Windows
+event log or text log entry was found. A PC-specific security filter remains
+possible. The phone's same-Wi-Fi TUN-only failure suggests a separate
+TUN-specific issue may also exist there.
+
+The PC receives `10.16.6.141/16` by DHCP from `10.16.0.1`, which is also its
+default gateway. The user describes this as a home router operating on campus,
+with one campus account and one public egress IP. The same-router phone test
+shows that this shared path can serve Fonts outside TUN mode, so the campus
+uplink is not a general block. With TUN and system proxy off, native queries
+returned `120.253.253.97` from `223.5.5.5` and `120.253.250.225` from
+`180.76.76.76`; Mihomo's direct attempts used `142.251.x.x`. This confirms
+different DNS answer sets. Native curl and Mihomo DIRECT requests both timed
+out on this PC when they used the Mihomo-observed addresses. A pinned-IP
+comparison with TUN and system proxy off settled the distinction:
+`curl --resolve` to `120.253.253.97` returned HTTP 200 in 0.227 seconds,
+`120.253.250.225` returned HTTP 200 in 0.196 seconds, and
+`142.251.215.74` timed out after 5.005 seconds. The browser hostname, TLS SNI,
+and direct route were held constant. The failing behavior is therefore
+address-set-dependent; the two system-DNS answers are reachable while the
+Mihomo-observed Google address is not.
+
+The PC's active DNS config has `ipv6: false`, `enhanced-mode: fake-ip`, and
+`fake-ip-range: 198.18.0.1/16`; TUN DNS hijacking is configured. While TUN was
+on, ordinary DNS lookup and explicit queries to the configured physical DNS
+servers `223.5.5.5` and `180.76.76.76` returned fake address `198.18.0.18`, as
+expected in fake-IP mode. Mihomo then resolved Fonts to real IPv4 addresses
+such as `142.251.210.138` and timed out. Its logs also show unusable IPv6
+attempts despite `dns.ipv6: false`; those appear separate from the verified
+IPv4 address-selection failure. The active TUN uses `stack: mixed`, `auto-route: true`,
+`auto-detect-interface: true`, and `strict-route: false`.
+
+The active Clash Party runtime file `mihomo-party/work/config.yaml` confirms
+the DNS/egress mismatch. It has `respect-rules: true`; its default `nameserver`
+and `nameserver-policy` for `geosite:geolocation-!cn` send queries to
+`8.8.8.8` and `1.1.1.1` using the `🌐 DNS 出口` group. It also sets
+`direct-nameserver` to domestic resolvers but
+`direct-nameserver-follow-policy: true`, so a DIRECT connection can still use
+the matching DNS policy, as described in the [Mihomo DNS configuration](https://wiki.metacubex.one/en/config/dns/)
+and [resolution flow](https://wiki.metacubex.one/en/config/dns/diagram/).
+The GoogleCN routing rule sends the resulting Fonts connection DIRECT. Thus
+the DNS query exits through the DNS proxy group while
+the HTTPS request exits through the campus connection, which returns an
+unreachable `142.251.x.x` answer on this path. This supports the user's
+node-DNS hypothesis and identifies the mismatch as the cause.
+
+The preferred general correction is to split DNS by egress. The runtime config
+already has domestic `direct-nameserver`, proxy-group-routed `nameserver`, a
+domestic `proxy-server-nameserver` for node hostnames, and
+`respect-rules: true`. Change `direct-nameserver-follow-policy` to `false` so
+DIRECT connections use the domestic direct resolver instead of inheriting the
+`geosite:geolocation-!cn` proxy DNS policy. Proxy-routed domain connections
+can continue sending the hostname through their selected proxy; the separate
+`🌐 DNS 出口` group remains for DNS-server traffic. Mihomo documents these
+behaviors in its [DNS configuration](https://wiki.metacubex.one/en/config/dns/)
+and [resolution flow](https://wiki.metacubex.one/en/config/dns/diagram/).
+An exact `nameserver-policy` for just `fonts.googleapis.com` and
+`fonts.gstatic.com` is a narrower fallback if the user wants to keep the
+current policy for other DIRECT domains. No live DNS setting has been changed.
+With TUN on, Windows selects the Mihomo virtual adapter for default-route
+traffic; the USB Ethernet adapter's `192.168.137.1` has no gateway and is not
+a second internet exit.
+
+This repository's external INI controls generated routing rules and groups;
+another `DIRECT` rule cannot select a DNS resolver. A rules-only workaround
+could instead send Fonts through a proxy, but would change the intended
+traffic exit. To distribute the general fix through subscription updates,
+change `direct-nameserver-follow-policy` to `false` in the source YAML or
+converter base that produces the subscription's `dns` section. The cached
+Clash Party profile and its effective `work/config.yaml` currently both carry
+`true`, and no client override for this field was found.
+After a subscription refresh, check that both files carry `false` and that a
+fresh Fonts request follows `DIRECT` to a reachable local-DNS address.
+Subconverter supports a custom YAML base through the external INI's
+`clash_rule_base` setting; use it only with a complete base that preserves the
+other profile fields and proxy groups. Its [official external-config example](https://github.com/tindy2013/subconverter/blob/master/base/config/example_external_config.ini)
+documents the setting. The current INI does not activate a custom base. Its
+published version also has no DNS section or `🌐 DNS 出口` group, although both
+appear in the cached client profile. An additional conversion base or later
+processing stage therefore supplies those settings. Replacing that base from
+this INI requires preserving its other fields and defining the DNS exit group;
+changing only a `ruleset=` line cannot make a direct route use local DNS.
+
 ## Client Prerequisites
 
 - Configure DNS in the client or converter base. Proxy routing alone does not
@@ -118,6 +238,47 @@ name to the relevant group's proxy list.
 - Keep session-sensitive services on a stable exit. Using load balancing can
   send related domains through different exits; use the same exit for AI
   sessions and shared authentication/challenge services when necessary.
+
+## Claude 出口与 WebRTC 排查
+
+规则优化可以减少误直连和不同分组造成的出口不一致，不能保证降低 Anthropic
+账号风控或避免封号。第三方检测站的信任分数、机房/住宅分类、时区与语言提示，
+不能当作 Anthropic 官方风控结论。规则也无法改变出口 IP 的 ASN、信誉、历史使用
+情况或浏览器的时区、语言、Canvas/WebGL 指纹。
+
+本模板已将 Claude/Anthropic 的明确目标域名放在国内进程直连规则之前，登录挑战
+`challenges.cloudflare.com` 也走 AI。已列出的 Google、Cloudflare、Twilio 和
+stunprotocol.org 公共 STUN 主机改为同走 AI，减少网页 HTTPS 与 WebRTC 使用不同
+代理分组的情况。共享 STUN 无法识别来自哪个网页，因此使用这些主机的其他应用也
+会受影响；国内应用仍保留更靠前的 STUN 进程直连例外。这些例外在不能识别下游
+进程的路由器上不生效。
+
+若检测结果仍显示 Claude 使用代理出口、WebRTC/UDP 却使用国内出口，按以下顺序
+检查客户端；仅更新这个 INI 不足以证明泄漏已修复：
+
+1. 更新订阅后，在 **AI 分组直接选择一个固定节点**，确认没有选中 DIRECT、
+   自动测速组或负载均衡组。AI 的默认回落仍是“节点选择”，其下级选择也可能自动
+   改变出口；客户端保存的旧选择不会被新规则自动纠正。
+2. 用 TUN/透明代理接管浏览器 UDP，确认未排除浏览器或相关 IPv4/IPv6 路由。
+   系统 HTTP 代理不能完整接管 WebRTC UDP。若使用链式代理，确认最终出口和整条
+   链路都支持 UDP；节点名称中的“家宽”不构成协议能力或 IP 属性的证明。
+3. 在连接日志中同时查看 Claude HTTPS 与 STUN 的目标、命中规则、策略链和实际
+   出口。Mihomo 文档说明，不支持 UDP 的代理会让 UDP 继续向后匹配规则，因此
+   “域名已经写成 AI”不等于 UDP 已经由 AI 出站。参见
+   [规则优先级](https://wiki.metacubex.one/en/config/rules/#priority)。
+4. DNS 与直连/代理出口分别配置，并一致覆盖 IPv6。Windows 的
+   `tun.strict-route: true` 可防止系统多网卡 DNS 泄漏，但不能单独证明 WebRTC
+   无泄漏，参见 [TUN 配置](https://wiki.metacubex.one/en/config/inbound/tun/#strict-route)。
+5. 不需要网页实时通话时，可在专用浏览器配置中禁用 WebRTC；需要通话时，应先验证
+   UDP 代理或浏览器支持的中继策略，再复测。未知 STUN 域名、字面 IP、自定义端口
+   和绕过 TUN 的连接不会因这份有限域名表而自动得到保护。模板未全局封禁 UDP，
+   以免破坏通话、游戏及已有 ChatGPT Voice 规则。
+
+重新打开检测页并在实际客户端复测：WebRTC 不应继续暴露非预期的国内公网地址；
+如果禁用了 WebRTC，无法探测 UDP 地址属于预期结果，不代表 UDP 代理已经可用。
+截图中单独显示的国内直连 IPv4 在分流配置下可以是预期行为，应与 WebRTC 获取到
+国内公网地址的问题区分。STUN 如何发现公网地址可见
+[MDN WebRTC 协议说明](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Protocols#stun)。
 
 ## Verification
 
