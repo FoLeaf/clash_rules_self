@@ -1,6 +1,6 @@
 # Overseas AI destination snapshot; no whole-process rules.
 # Source: https://raw.githubusercontent.com/VPSDance/ai-proxy-rules/main/rules/quantumult-x/global.list
-# Refresh: python -B tools/build_misub.py --refresh-ai
+# HOST/HOST-SUFFIX/HOST-KEYWORD and IP6-CIDR normalized to Mihomo rule types.
 DOMAIN-SUFFIX,firefly.adobe.com
 DOMAIN-SUFFIX,firefly.adobe.io
 DOMAIN,aws-language-servers.us-east-1.amazonaws.com

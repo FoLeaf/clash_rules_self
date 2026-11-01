@@ -17,26 +17,7 @@ function main(config) {
   if (config.dns && (config.dns["direct-nameserver"] || []).length) {
     config.dns["direct-nameserver-follow-policy"] = false;
   }
-  // Subscription refreshes can restore DIRECT members. Keep overseas-only
-  // selectors closed; Apple/Microsoft/games retain their explicit direct option.
-  const proxyOnly = new Set([
-    "🚀 节点选择", "📲 电报消息", "🤖 AI", "🎬 国外流媒体", "🌐 国外社交", "🐟 漏网之鱼",
-  ]);
-  const groups = new Map((config["proxy-groups"] || []).map((group) => [group.name, group]));
-  const directNames = new Set(["DIRECT", ...(config.proxies || [])
-    .filter((proxy) => proxy.type === "direct").map((proxy) => proxy.name)]);
-  // Follow nested selectors too: an automatic group containing DIRECT would
-  // otherwise reopen the same leak through the node-selection group.
-  for (const name of proxyOnly) {
-    for (const member of groups.get(name)?.proxies || []) {
-      if (groups.has(member)) proxyOnly.add(member);
-    }
-  }
-  for (const group of config["proxy-groups"] || []) {
-    if (!proxyOnly.has(group.name) || !Array.isArray(group.proxies)) continue;
-    group.proxies = group.proxies.filter((name) => !directNames.has(name));
-    if (!group.proxies.length && !(group.use || []).length) group.proxies = ["REJECT"];
-  }
+  // Preserve all user group definitions, including DIRECT and selector order.
   const rules = (config.rules || []).map((rule) => {
     // Restore the flags known to be discarded by the client converter. Early
     // voice IP pins must not force DNS queries for every unrelated domain.

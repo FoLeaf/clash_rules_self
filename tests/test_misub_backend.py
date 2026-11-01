@@ -3,7 +3,6 @@
 Set MIHOMO_BIN too to verify native backend output with local UDP packets.
 """
 
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,9 +14,7 @@ import test_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = os.environ.get("MISUB_SOURCE")
-spec = importlib.util.spec_from_file_location("misub_builder", ROOT / "tools/build_misub.py")
-builder = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(builder)
+RAW_BASE = "https://raw.githubusercontent.com/FoLeaf/clash_rules_self/main/"
 
 
 def render(template, **options):
@@ -28,9 +25,10 @@ def render(template, **options):
 
 
 class MiSubArtifactTests(unittest.TestCase):
-    def test_generated_native_template_is_current_and_has_adjacent_guards(self):
-        text = (ROOT / "acl4ssr-ai-chain-misub.ini").read_text(encoding="utf-8")
-        self.assertEqual(text, builder.build((ROOT / "acl4ssr-ai-chain-v2.ini").read_text(encoding="utf-8-sig")))
+    def test_original_ini_has_adjacent_guards_without_changing_groups(self):
+        text = (ROOT / "acl4ssr-ai-chain-v2.ini").read_text(encoding="utf-8-sig")
+        expected = (ROOT / "tests/fixtures/original-groups.txt").read_text(encoding="utf-8").splitlines()
+        self.assertEqual([line for line in text.splitlines() if line.startswith("custom_proxy_group=")], expected)
         self.assertLess(len(text), 128 * 1024)
         rules = [line for line in text.splitlines() if line.startswith("ruleset=")]
         for index, line in enumerate(rules):
@@ -40,7 +38,7 @@ class MiSubArtifactTests(unittest.TestCase):
         self.assertNotIn("quanx:", text)
         self.assertNotIn("[]AND,", text)
         self.assertNotIn("[]IP-CIDR", text)
-        self.assertIn(builder.RAW_BASE + "rules/cn-ip-fallback.list", text)
+        self.assertIn(RAW_BASE + "rules/cn-ip-fallback.list", text)
 
     def test_native_ai_provider_is_classical_and_excludes_process_rules(self):
         rules = [line for line in (ROOT / "rules/overseas-ai.list").read_text(encoding="utf-8").splitlines()
@@ -56,7 +54,7 @@ class MiSubGenerationTests(unittest.TestCase):
     def test_full_template_preserves_guards_dns_groups_and_udp(self):
         import yaml
         dns = (ROOT / "configs/misub-dns.yaml").read_text(encoding="utf-8")
-        config = render((ROOT / "acl4ssr-ai-chain-misub.ini").read_text(encoding="utf-8"),
+        config = render((ROOT / "acl4ssr-ai-chain-v2.ini").read_text(encoding="utf-8-sig"),
                         nodeList="vless://00000000-0000-4000-8000-000000000001@proxy.example.com:443?security=tls&type=tcp#test-node",
                         enableUdp=True, customDnsOverride=dns)
         self.assertTrue(config["proxies"][0]["udp"])

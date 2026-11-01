@@ -5,55 +5,16 @@ standalone Clash/Mihomo YAML file. Supply it as the converter's `config`
 parameter together with your subscription. A working proxy subscription is
 still required.
 
-## MiSub：无客户端脚本方案
+## 使用原配置，分组保持不变
 
-MiSub 内置引擎使用 [`acl4ssr-ai-chain-misub.ini`](acl4ssr-ai-chain-misub.ini)，
-在后端开启 UDP 转发，并把 [`configs/misub-dns.yaml`](configs/misub-dns.yaml) 填入
-MiSub 的 DNS 覆写入口。代理规则与同目标 REJECT 成对生成，不需要客户端脚本，
-也不需要修改 MiSub 源码。须先发布模板依赖的 `rules/` 文件。
-完整步骤、真实生成器验证和维护方式见 [`docs/misub.md`](docs/misub.md)。
+继续使用 [`acl4ssr-ai-chain-v2.ini`](acl4ssr-ai-chain-v2.ini)。全部 11 个分组保持修改前的
+名称、类型、成员、DIRECT 选项、默认顺序和首选节点表达式；不再提供另一个专用 INI。
+本次只调整目标规则、必要的匹配顺序，以及代理规则后的同条件 REJECT。
+国内服务和 Steam 定位/下载继续直连；游戏、微软、苹果等沿用原策略组。
 
-下文的 `acl4ssr-ai-chain-v2.ini` 与 JavaScript 绑定说明适用于原有转换方案；
-使用 MiSub 专用模板时，按上面的后端方案配置即可。
-
-## 使用方式（2026-11-01 更新）
-
-更新订阅转换用的 INI 后，还须在 Clash Party 当前订阅上绑定
-[`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js)，并重新激活订阅。
-该脚本保留原文件名以兼容已有绑定，现已覆盖全部代理规则的 UDP 回落，并在已有
-`direct-nameserver` 时设置 `direct-nameserver-follow-policy: false`。
-脚本应在其他新增节点/规则的覆写之后执行；仅更新 INI 不会安装或更新客户端本地脚本。
-
-国内域名保持直连；微信、QQ 等进程仅兜底尚未识别的目标，内嵌网页先按目标域名分流。
-Claude/OpenAI 优先走 AI；公共 STUN 也走 AI，包括国内进程对这些主机的请求。
-节点选择、AI、社交、流媒体、电报和漏网之鱼移除 DIRECT；游戏、微软、苹果保留可选直连。
-没有可用代理时应拒绝连接，不能自动直连。国内应用若依赖这些公共 STUN，而 AI 节点不支持
-UDP，相关通话会被拒绝；使用支持 UDP 的出口，或为确认可直连的国内服务添加精确目标规则。
-
-这些修改已通过本地核心回归；实际设备仍须启用完整 TUN/透明接管、配置代理 DNS 与 IPv6，
-并检查连接日志和浏览器 WebRTC。下文的历史排查记录说明旧配置的行为。
-
-## VLESS 的 UDP 经 TCP 隧道转发
-
-VLESS 使用 `network: tcp`、TLS、WebSocket 等传输时，可以在已有连接里封装 UDP。
-本覆写会把实际 `proxies` 中 VLESS 节点的 `udp` 设为 `true`，包括订阅原来标为
-`udp: false` 的节点；保留 `network`、TLS/REALITY、链路设置和已有的 `packet-encoding`。
-QUIC、STUN 等 UDP 数据因此可以经选定 VLESS 节点的 TCP 隧道出站，无需本机直连。
-这项行为是 UDP 封装，QUIC 到服务端后仍是 QUIC，并未转换成 HTTP/2。
-
-`packet-encoding: xudp`、`packetaddr` 需要服务端支持；未指定时保留 Mihomo 默认行为，
-不强行更换封装。服务端还须允许 UDP 转发；只开放节点的 TCP 监听端口也能承载这条
-隧道，但“节点能连 TCP”本身不足以证明服务端允许转发 UDP。参见
-[Mihomo VLESS 配置](https://wiki.metacubex.one/en/config/proxies/vless/)。
-通过 `proxy-providers` 在启动后动态加载的节点不在这次脚本遍历的 `proxies` 中；
-这类订阅须在对应 provider 的覆写中配置 UDP 能力。
-
-如果协议或服务端确实不能代理 UDP，普通 UDP 无法由规则通用转换成 TCP。
-网页 HTTP/3 可以在 QUIC 不可用后由浏览器重试 HTTP/2 或 HTTP/1.1，这些 TCP 连接
-继续命中相同 AI/代理规则；具体重试由浏览器决定。STUN、游戏等只有在应用支持
-TCP/TURN 中继时才有相应替代路径。参见
-[RFC 9114 §3.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-3.1)。
-覆写保留不支持 UDP 时的 REJECT 兜底；服务端拒绝封装时也不得改走 DIRECT。
+MiSub 内置转换可直接使用这个原文件，无需客户端覆写脚本。保留已有 DNS 设置，并在需要
+VLESS UDP 转发时开启 MiSub 的 UDP 转发选项。步骤见 [`docs/misub.md`](docs/misub.md)。
+规则按所选策略执行，手动选择 DIRECT 的原有能力保留。
 
 ## Routing Defaults
 
@@ -65,8 +26,8 @@ TCP/TURN 中继时才有相应替代路径。参见
   before domestic process overrides. ChatGPT, Codex, API, authentication, file
   transfers, updates, documentation, status and WebSocket subdomains are covered
   independently of the aggregated AI list. The canonical source is
-  [`rules/openai-ai.list`](rules/openai-ai.list); its active rules must remain
-  identical to the marked block in the INI so remote conversions are self-contained.
+  [`rules/openai-ai.list`](rules/openai-ai.list); its domain rules remain inline in the marked INI block. Voice IPs use that
+  same native classical source so MiSub retains their no-resolve flags.
   This includes all dependencies in OpenAI's
   [official network recommendations](https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps),
   checked on 2026-10-16. Shared dependencies such as Cloudflare challenges,
@@ -78,8 +39,8 @@ TCP/TURN 中继时才有相应替代路径。参见
 - ChatGPT Voice's 402 currently published IP ranges are pinned to AI with
   `no-resolve`, before process fallbacks. They come from the
   [official voice JSON](https://openai.com/chatgpt-voice.json), retrieved on
-  2026-11-01 (source creation time: 2026-10-27). Refresh both the canonical list
-  and its inline block when the online check reports a new range. UDP voice
+  2026-11-01 (source creation time: 2026-10-27). Refresh the canonical list
+  when the online check reports a new range. UDP voice
   requires transparent/TUN capture and a UDP-capable AI exit.
 - Anthropic traffic is pinned to the AI group: claude.ai, claude.com and the
   other Claude product domains, anthropic.com with all its subdomains
@@ -92,20 +53,14 @@ TCP/TURN 中继时才有相应替代路径。参见
   telemetry domains (other sentry.io ingest and datadog hosts) stay on node
   selection by design; Cloudflare challenges and the OpenAI dependency exceptions
   above use AI. Align the AI and node-selection exits if login challenges loop.
-- UDP fallback protection must be installed after conversion. The client converter
-  cannot preserve inline logical rules, so bind
-  [`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js) in Clash Party.
-  The script adds a matching UDP REJECT immediately after each proxy rule,
-  including domain keywords, literal IPs, RULE-SETs and MATCH. Supported UDP
-  takes the original proxy rule; unsupported UDP stops at REJECT before any
-  later DIRECT rule. This covers all ports, including QUIC and STUN. Known
-  domestic DIRECT rules retain their original behavior. The script preserves
-  `no-resolve` inside the logical condition and is safe to apply repeatedly.
-  It restores converter-dropped `no-resolve` on AI IP pins and the CN GEOIP
-  fallback, so early voice rules do not resolve unrelated domains.
+- Proxy rules are followed by an identical predicate targeting REJECT. TCP
+  and supported UDP match the original policy; unsupported UDP reaches REJECT
+  before later DIRECT rules. This works with MiSub's existing INI parser and
+  does not require inline AND rules or a client script. DIRECT destinations and
+  user-selected DIRECT group members keep their original behavior.
 - Microsoft and Apple groups default to DIRECT, but can be switched to a proxy.
-- Games and unmatched traffic default to node selection. Games retain an
-  explicit DIRECT option; overseas-only groups and unmatched traffic do not.
+- Games and unmatched traffic default to node selection. DIRECT remains an
+  explicit option.
 - Steam's location detection and content downloads stay DIRECT even when the
   game group is switched to a node; everything else about the game group still
   follows it. At startup Steam fetches
@@ -140,18 +95,15 @@ TCP/TURN 中继时才有相应替代路径。参见
   clients use DIRECT only after known destination rules have been checked.
 - No advertising blocklist or unconditional unblocking allowlist is imported.
 
-Existing clients can restore saved selections. Reimport the override and
-reactivate the subscription; confirm overseas-only groups no longer offer
-DIRECT and choose a fixed AI exit for session-sensitive services.
+Existing clients can restore saved group selections. After updating, check the
+game and unmatched-traffic groups: a previously saved DIRECT selection may
+override the new defaults.
 
-Overseas AI uses VPSDance's Quantumult X list because it excludes whole-process
-rules. The `quanx:` prefix is required: subconverter must translate `HOST` rules
-to Clash domain rules. Do not replace it with the Surge list, whose process rules
-would also proxy domestic requests from Cursor, Codex and other AI clients.
-OpenAI and Anthropic are additionally pinned inline ahead of that list, so their
-explicit coverage does not depend on upstream changes; the aggregated list
-supplements it. OpenAI's list avoids upstream's broad `openai` keyword, which
-would also match unrelated domains containing that text.
+Overseas AI uses [`rules/overseas-ai.list`](rules/overseas-ai.list), a normalized
+snapshot of VPSDance's Quantumult X destination rules. HOST rules become Mihomo
+DOMAIN rules before publication, so MiSub can load the list directly. It excludes
+whole-process rules; domestic requests from an AI client still follow their
+normal destination rules. Refresh the snapshot when upstream coverage changes.
 
 ## Optional Residential Proxies
 
@@ -257,8 +209,8 @@ behaviors in its [DNS configuration](https://wiki.metacubex.one/en/config/dns/)
 and [resolution flow](https://wiki.metacubex.one/en/config/dns/diagram/).
 An exact `nameserver-policy` for just `fonts.googleapis.com` and
 `fonts.gstatic.com` is a narrower fallback if the user wants to keep the
-current policy for other DIRECT domains. The runtime override now applies this field when `direct-nameserver` is set;
-no live client setting was changed while editing this repository.
+current policy for other DIRECT domains. No live DNS setting has been changed. The user-provided DNS configuration
+already sets direct-nameserver-follow-policy to false.
 With TUN on, Windows selects the Mihomo virtual adapter for default-route
 traffic; the USB Ethernet adapter's `192.168.137.1` has no gateway and is not
 a second internet exit.
@@ -268,10 +220,9 @@ another `DIRECT` rule cannot select a DNS resolver. A rules-only workaround
 could instead send Fonts through a proxy, but would change the intended
 traffic exit. To distribute the general fix through subscription updates,
 change `direct-nameserver-follow-policy` to `false` in the source YAML or
-converter base that produces the subscription's `dns` section. At the time of that capture, the cached
+converter base that produces the subscription's `dns` section. At the time of this historical capture, the cached
 Clash Party profile and effective `work/config.yaml` both carried `true`. The
-repository override now changes it to `false` when a direct resolver exists;
-install the updated script in the client to apply it.
+user-provided current DNS configuration now carries `false`.
 After a subscription refresh, check that both files carry `false` and that a
 fresh Fonts request follows `DIRECT` to a reachable local-DNS address.
 Subconverter supports a custom YAML base through the external INI's
@@ -302,63 +253,20 @@ changing only a `ruleset=` line cannot make a direct route use local DNS.
   send related domains through different exits; use the same exit for AI
   sessions and shared authentication/challenge services when necessary.
 
-## Claude 出口与 WebRTC 排查
+## Claude 出口与 UDP
 
-规则优化可以减少误直连和不同分组造成的出口不一致，不能保证降低 Anthropic
-账号风控或避免封号。第三方检测站的信任分数、机房/住宅分类、时区与语言提示，
-不能当作 Anthropic 官方风控结论。规则也无法改变出口 IP 的 ASN、信誉、历史使用
-情况或浏览器的时区、语言、Canvas/WebGL 指纹。
+Claude/Anthropic 域名与认证挑战走原有 AI 分组。每条代理规则后跟随同目标 REJECT，
+节点不支持 UDP 时停止匹配，避免回落到国内 IP 或进程直连。国内进程规则位于已识别
+目标规则之后，内嵌网页先按目标分流；已知公共 STUN 与 AI 同组。
 
-本模板已将 Claude/Anthropic 的明确目标域名放在国内进程直连规则之前，登录挑战
-`challenges.cloudflare.com` 也走 AI。已列出的 Google、Cloudflare、Twilio 和
-stunprotocol.org 公共 STUN 主机改为同走 AI，减少网页 HTTPS 与 WebRTC 使用不同
-代理分组的情况。共享 STUN 无法识别来自哪个网页，因此使用这些主机的其他应用也
-会受影响；已知公共 STUN 优先于国内进程兜底；国内服务仍按国内目标域名直连。
+所有分组保持原样，规则不会替用户删除 DIRECT 选项或更换节点。保留的
+[`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js) 也不再改动分组，
+仅供旧转换流程兼容；使用当前 INI 的 MiSub 方案不需要绑定它。
 
-2026-10-31 的日志确认了一处路由缺陷：Claude TCP 请求走 AI，美国出口节点的
-`udp: false` 导致浏览器 UDP 443 请求回落 DIRECT。日志不能证明 QUIC 握手成功或
-地区跳转由此造成；地区限制是否解除须通过浏览器复测确认。
-
-客户端转换器会把 INI 内联 AND 规则截断成 `AND,((NETWORK,REJECT`，因此兜底须在
-转换完成后注入，见 [`overrides/claude-quic-reject.js`](overrides/claude-quic-reject.js)。
-脚本从实际配置的每一条代理规则生成 UDP REJECT，紧跟原规则插入，覆盖全部端口、
-域名/关键词/IP/RULE-SET 与最终代理兜底。支持 UDP 的出口仍命中原规则；不支持时拒绝
-连接，QUIC 浏览器可回落 TCP。STUN 被拒绝表示该路径不可用，不代表 UDP 已代理成功。
-无域名的连接由 IP、进程和最终规则继续分流；未知国内 IP 仍可能命中国内 IP 直连规则，
-任意 STUN/WebRTC 目标和绕过 TUN 的流量仍需浏览器与客户端共同控制。
-脚本同时清除标准海外专用组的 DIRECT 成员；保留游戏、微软和苹果组的显式直连。
-
-在 Clash Party 的「覆写」页编辑或导入本地 JavaScript 脚本，再通过当前订阅的
-「编辑信息 → 覆写」选择该脚本并保存。不要在客户端运行时直接修改 profile.yaml：
-内存状态可能覆盖文件。重新激活订阅后，检查有效配置包含挑战域名及 STUN 的 AND/REJECT 规则，
-并检查新连接日志中不支持的 UDP 命中 REJECT、TCP 仍走 AI。仅更新 INI 不会挂载此脚本。
-
-若检测结果仍显示 Claude 使用代理出口、WebRTC/UDP 却使用国内出口，按以下顺序
-检查客户端；仅更新这个 INI 不足以证明泄漏已修复：
-
-1. 更新订阅后，在 **AI 分组直接选择一个固定节点**，确认没有选中 DIRECT、
-   自动测速组或负载均衡组。AI 的默认回落仍是“节点选择”，其下级选择也可能自动
-   改变出口；更新后的专用分组与覆写已移除 DIRECT 选项。
-2. 用 TUN/透明代理接管浏览器 UDP，确认未排除浏览器或相关 IPv4/IPv6 路由。
-   系统 HTTP 代理不能完整接管 WebRTC UDP。若使用链式代理，确认最终出口和整条
-   链路都支持 UDP；节点名称中的“家宽”不构成协议能力或 IP 属性的证明。
-3. 在连接日志中同时查看 Claude HTTPS 与 STUN 的目标、命中规则、策略链和实际
-   出口。Mihomo 文档说明，不支持 UDP 的代理会让 UDP 继续向后匹配规则，因此
-   “域名已经写成 AI”不等于 UDP 已经由 AI 出站。参见
-   [规则优先级](https://wiki.metacubex.one/en/config/rules/#priority)。
-4. DNS 与直连/代理出口分别配置，并一致覆盖 IPv6。Windows 的
-   `tun.strict-route: true` 可防止系统多网卡 DNS 泄漏，但不能单独证明 WebRTC
-   无泄漏，参见 [TUN 配置](https://wiki.metacubex.one/en/config/inbound/tun/#strict-route)。
-5. 不需要网页实时通话时，可在专用浏览器配置中禁用 WebRTC；需要通话时，应先验证
-   UDP 代理或浏览器支持的中继策略，再复测。未知 STUN 域名、字面 IP、自定义端口
-   和绕过 TUN 的连接不会因这份有限域名表而自动得到保护。覆写按目标策略拒绝代理节点不支持的 UDP，
-   国内 DIRECT 目标仍可使用 UDP；ChatGPT Voice 需要支持 UDP 的 AI 出口。
-
-重新打开检测页并在实际客户端复测：WebRTC 不应继续暴露非预期的国内公网地址；
-如果禁用了 WebRTC，无法探测 UDP 地址属于预期结果，不代表 UDP 代理已经可用。
-截图中单独显示的国内直连 IPv4 在分流配置下可以是预期行为，应与 WebRTC 获取到
-国内公网地址的问题区分。STUN 如何发现公网地址可见
-[MDN WebRTC 协议说明](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Protocols#stun)。
+VLESS 可以在 TCP/TLS/WS 连接中承载 UDP，服务端须允许转发；MiSub 中开启 UDP 转发
+后检查输出节点的 `udp: true`。如果协议确实不支持 UDP，网页 QUIC 可由浏览器重试
+TCP/HTTPS；普通 UDP 需要应用支持相应中继方式。TUN、IPv6 与 WebRTC 仍按客户端
+原有设置接管和验证。分流规则不会强制把整个浏览器进程送到代理。
 
 ## Verification
 
@@ -370,18 +278,6 @@ python -B tests/test_rules.py --online -v
 python -B tests/test_rules.py --generated-yaml path/to/converted.yaml -v
 ```
 
-Offline override checks require Node.js on PATH and execute the JavaScript entry point.
-For actual core regression checks, set `MIHOMO_BIN` to your core executable:
-
-```powershell
-$env:MIHOMO_BIN = 'C:\path\to\mihomo.exe'
-python -B -m unittest discover -s tests -v
-```
-
-The core tests launch isolated temporary configurations with local UDP receivers
-and DNS responders. They reproduce unsupported-UDP fallthrough and DIRECT DNS
-policy inheritance without touching the running client or contacting internet
-services. Without `MIHOMO_BIN` (or `mihomo` on PATH), these tests are skipped.
 Online and generated-YAML checks require PyYAML. `--cache-dir PATH` saves fetched
 rule sources for inspection. Tests cover rule order, destination/process routing,
 default group choices, OpenAI dependency/process precedence, literal voice IP

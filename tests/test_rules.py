@@ -25,6 +25,7 @@ OVERRIDES = ROOT / "rules" / "cn-direct-override.list"
 OPENAI_OVERRIDES = ROOT / "rules" / "openai-ai.list"
 STEAM_DIRECT = ROOT / "rules" / "steam-direct.list"
 QUIC_OVERRIDE = ROOT / "overrides" / "claude-quic-reject.js"
+RAW_BASE = "https://raw.githubusercontent.com/FoLeaf/clash_rules_self/main/"
 # Independent acceptance cases from OpenAI's published network recommendations,
 # plus product endpoints and dedicated CDN/voice hosts. Do not derive from rules.
 OPENAI_DOMAINS = (
@@ -190,10 +191,19 @@ class ConfigTests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = CONFIG.read_text(encoding="utf-8-sig")
         cls.rules = rulesets(cls.text)
-        cls.inline = [(policy, source[2:]) for policy, source in cls.rules if source.startswith("[]")]
+        cls.inline = []
+        local_providers = {RAW_BASE + "rules/openai-ai.list": OPENAI_OVERRIDES,
+                           RAW_BASE + "rules/cn-ip-fallback.list": ROOT / "rules/cn-ip-fallback.list"}
+        for policy, source in cls.rules:
+            if source.startswith("[]"):
+                cls.inline.append((policy, source[2:]))
+            elif source in local_providers:
+                cls.inline.extend((policy, rule) for rule in active_lines(
+                    local_providers[source].read_text(encoding="utf-8")))
 
     def position(self, suffix):
-        matches = [i for i, (_, source) in enumerate(self.rules) if source.endswith(suffix)]
+        matches = [i for i, (policy, source) in enumerate(self.rules)
+                   if policy != "REJECT" and source.endswith(suffix)]
         self.assertEqual(len(matches), 1, suffix)
         return matches[0]
 
@@ -214,8 +224,8 @@ class ConfigTests(unittest.TestCase):
 
     def test_select_defaults_and_optional_residential_nodes(self):
         groups = {group.split("`")[0]: group for group in values(self.text, "custom_proxy_group")}
-        for name in (NODE, AI, SOCIAL, MEDIA, TELEGRAM, FALLBACK):
-            self.assertNotIn("[]DIRECT", groups[name].split("`"), name)
+        original = (ROOT / "tests/fixtures/original-groups.txt").read_text(encoding="utf-8")
+        self.assertEqual(values(self.text, "custom_proxy_group"), values(original, "custom_proxy_group"))
         ordinary_nodes = ["Example SG", "Example US"]
         for name in (AI, SOCIAL, GAMES, FALLBACK):
             self.assertEqual(select_members(groups[name], ordinary_nodes)[0], NODE, name)
@@ -251,17 +261,21 @@ class ConfigTests(unittest.TestCase):
     def test_openai_overrides_are_inlined_before_process_and_shared_rules(self):
         block = self.text.split("; BEGIN OPENAI AI OVERRIDES\n", 1)[1]
         block = block.split("; END OPENAI AI OVERRIDES", 1)[0]
-        expected = [(AI, "[]" + rule) for rule in active_lines(
-            OPENAI_OVERRIDES.read_text(encoding="utf-8-sig"))]
+        expected = []
+        for rule in active_lines(OPENAI_OVERRIDES.read_text(encoding="utf-8-sig")):
+            if rule.startswith(("DOMAIN,", "DOMAIN-SUFFIX,")):
+                expected.extend(((AI, "[]" + rule), ("REJECT", "[]" + rule)))
+        expected.extend(((AI, RAW_BASE + "rules/openai-ai.list"),
+                         ("REJECT", RAW_BASE + "rules/openai-ai.list")))
         self.assertEqual(rulesets(block), expected)
         end = max(self.rules.index(rule) for rule in expected)
         for index, (_, source) in enumerate(self.rules):
             if "PROCESS-NAME," in source or source.endswith((
-                    ",auth0.com", ",sentry", ",stripe.com", "/global.list",
+                    ",auth0.com", ",sentry", ",stripe.com", "/overseas-ai.list",
                     "/Apple.list", "/ChinaDomain.list")):
                 self.assertLess(end, index, source)
         for _, source in expected:
-            self.assertRegex(source, r"^\[\](DOMAIN|DOMAIN-SUFFIX|IP-CIDR6?),")
+            self.assertTrue(source.startswith(("[]DOMAIN,", "[]DOMAIN-SUFFIX,", RAW_BASE)), source)
         self.assertFalse(any(policy == AI and "PROCESS-" in source
                              for policy, source in self.rules))
 
@@ -315,18 +329,20 @@ class ConfigTests(unittest.TestCase):
         china = self.position("/ChinaDomain.list")
         for suffix in (",gvt1.com", ",gvt2.com", ",gvt3.com", ",storage.googleapis.com",
                        ",googleapis.cn", ",xn--ngstr-lra8j.com", ",linux.sb",
-                       "/global.list", "/YouTube.list", "/TikTok.list",
+                       "/overseas-ai.list", "/YouTube.list", "/TikTok.list",
                        "/Bing.list", "/OneDrive.list", "/Microsoft.list", "/Apple.list",
                        "/Epic.list", "/Steam.list", "/Nintendo.list", "/PlayStation.list"):
             self.assertLess(self.position(suffix), min(direct, china), suffix)
-        self.assertLess(self.position("/global.list"), self.position("/cn.list"))
+        self.assertLess(self.position("/overseas-ai.list"), self.position("/cn.list"))
         self.assertNotIn("/rules/surge/all.list", self.text)
 
     def test_ai_source_excludes_whole_process_routing(self):
-        source = self.rules[self.position("/global.list")][1]
+        source = self.rules[self.position("/overseas-ai.list")][1]
         kind, url = source_type(source)
-        self.assertEqual(kind, "quanx")
-        self.assertEqual(url, "https://raw.githubusercontent.com/VPSDance/ai-proxy-rules/main/rules/quantumult-x/global.list")
+        self.assertEqual(kind, "surge")
+        self.assertEqual(url, RAW_BASE + "rules/overseas-ai.list")
+        self.assertFalse(any(rule.startswith("PROCESS-") for rule in active_lines(
+            (ROOT / "rules/overseas-ai.list").read_text(encoding="utf-8"))))
 
     def test_downloads_follow_destination_before_bt_fallback(self):
         self.assertFalse(any(source.endswith(("/UnBan.list", "/Download.list")) for _, source in self.rules))
@@ -338,12 +354,12 @@ class ConfigTests(unittest.TestCase):
             self.assertLess(position, self.position("/ChinaCompanyIp.list"))
 
     def test_google_and_ip_fallback_order(self):
-        for suffix in ("/global.list", "/YouTube.list", "/GoogleCN.list"):
+        for suffix in ("/overseas-ai.list", "/YouTube.list", "/GoogleCN.list"):
             self.assertLess(self.position(suffix), self.position("/Google.list"))
-        for suffix in ("/ChinaCompanyIp.list", "/cncidr.txt", "[]GEOIP,CN,no-resolve"):
+        for suffix in ("/ChinaCompanyIp.list", "/cncidr.txt", "/cn-ip-fallback.list"):
             self.assertLess(self.position("/gfw.txt"), self.position(suffix))
-        self.assertEqual(self.rules[-1], (FALLBACK, "[]FINAL"))
-        self.assertEqual(sum(source in ("[]FINAL", "[]MATCH") for _, source in self.rules), 1)
+        self.assertEqual(self.rules[-2:], [(FALLBACK, "[]FINAL"), ("REJECT", "[]FINAL")])
+        self.assertEqual(sum(source in ("[]FINAL", "[]MATCH") for _, source in self.rules), 2)
         fallback = next(group for group in values(self.text, "custom_proxy_group") if group.startswith(FALLBACK + "`"))
         self.assertEqual(fallback.split("`")[2], "[]" + NODE)
 
@@ -401,10 +417,10 @@ class ConfigTests(unittest.TestCase):
     def test_anthropic_traffic_is_locked_to_ai_group(self):
         block = self.position("[]DOMAIN-SUFFIX,anthropic.com")
         for guard in ("[]DOMAIN-SUFFIX,auth0.com", "[]DOMAIN-KEYWORD,sentry",
-                      "/global.list", "/Google.list", "/ChinaDomain.list", "[]FINAL"):
+                      "/overseas-ai.list", "/Google.list", "/ChinaDomain.list", "[]FINAL"):
             self.assertLess(block, self.position(guard), guard)
         anthropic_rules = [(policy, rule) for policy, rule in self.inline
-                           if "anthropic" in rule or "claude" in rule]
+                           if policy != "REJECT" and ("anthropic" in rule or "claude" in rule)]
         self.assertEqual(len(anthropic_rules), 14)
         for policy, rule in anthropic_rules:
             self.assertEqual(policy, AI, rule)
@@ -491,7 +507,7 @@ process.stdout.write(JSON.stringify(config));
         self.assertEqual(self.apply_quic_override(unrelated), unrelated)
         self.assertEqual(self.apply_quic_override({}), {"rules": []})
 
-    def test_override_keeps_proxy_groups_closed_and_preserves_explicit_rejects(self):
+    def test_override_preserves_original_groups_and_explicit_rejects(self):
         config = {"proxy-groups": [
             {"name": AI, "proxies": [NODE, "DIRECT"]},
             {"name": NODE, "proxies": ["automatic", "DIRECT", "local-direct"]},
@@ -501,11 +517,7 @@ process.stdout.write(JSON.stringify(config));
         ], "proxies": [{"name": "local-direct", "type": "direct"}],
             "rules": ["NETWORK,UDP,REJECT", f"MATCH,{AI}"]}
         output = self.apply_quic_override(config, repeats=2)
-        self.assertEqual(output["proxy-groups"][0]["proxies"], [NODE])
-        self.assertEqual(output["proxy-groups"][1]["proxies"], ["automatic"])
-        self.assertEqual(output["proxy-groups"][2]["proxies"], [])
-        self.assertEqual(output["proxy-groups"][3], config["proxy-groups"][3])
-        self.assertEqual(output["proxy-groups"][4]["proxies"], ["REJECT"])
+        self.assertEqual(output["proxy-groups"], config["proxy-groups"])
         self.assertEqual(output["rules"], ["NETWORK,UDP,REJECT", f"MATCH,{AI}", "NETWORK,UDP,REJECT"])
 
     def test_override_restores_converter_dropped_no_resolve(self):
