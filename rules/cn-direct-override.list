@@ -1,6 +1,6 @@
 # 微信 / 淘宝 / 支付宝优先直连
-# 必须排在 AI、Google、TikTok 以及 FINAL 之前，以 DIRECT 策略使用。
-# 主 INI 的 CN DIRECT OVERRIDES 区块内联同一份规则，不依赖尚未发布的远程文件。
+# 域名优先直连；进程规则须在全部已知目标规则之后、IP 兜底之前使用。
+# 主 INI 分别在 CN DIRECT OVERRIDES 和 CN PROCESS FALLBACKS 内联域名与进程规则。
 # 进程规则依赖客户端的进程识别；路由器无法识别下游设备的进程。
 # 不全局直连公共 STUN 或整个腾讯云 ASN，避免影响其他应用的出口。
 

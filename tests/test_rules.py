@@ -12,6 +12,7 @@ import ipaddress
 import json
 import re
 import sys
+import subprocess
 import time
 import unittest
 from pathlib import Path
@@ -213,6 +214,8 @@ class ConfigTests(unittest.TestCase):
 
     def test_select_defaults_and_optional_residential_nodes(self):
         groups = {group.split("`")[0]: group for group in values(self.text, "custom_proxy_group")}
+        for name in (NODE, AI, SOCIAL, MEDIA, TELEGRAM, FALLBACK):
+            self.assertNotIn("[]DIRECT", groups[name].split("`"), name)
         ordinary_nodes = ["Example SG", "Example US"]
         for name in (AI, SOCIAL, GAMES, FALLBACK):
             self.assertEqual(select_members(groups[name], ordinary_nodes)[0], NODE, name)
@@ -230,10 +233,20 @@ class ConfigTests(unittest.TestCase):
     def test_override_file_is_inlined_in_order(self):
         block = self.text.split("; BEGIN CN DIRECT OVERRIDES\n", 1)[1]
         block = block.split("; END CN DIRECT OVERRIDES", 1)[0]
-        expected = [("DIRECT", "[]" + rule) for rule in active_lines(OVERRIDES.read_text(encoding="utf-8-sig"))]
+        source_rules = active_lines(OVERRIDES.read_text(encoding="utf-8-sig"))
+        expected = [("DIRECT", "[]" + rule) for rule in source_rules
+                    if not rule.startswith("PROCESS-NAME,")]
         self.assertEqual(rulesets(block), expected)
         for _, source in expected:
             self.assertRegex(source, r"^\[\](PROCESS-NAME|DOMAIN|DOMAIN-SUFFIX),[^,]+$")
+        processes = self.text.split("; BEGIN CN PROCESS FALLBACKS\n", 1)[1]
+        processes = processes.split("; END CN PROCESS FALLBACKS", 1)[0]
+        expected_processes = [("DIRECT", "[]" + rule) for rule in source_rules
+                              if rule.startswith("PROCESS-NAME,")]
+        self.assertEqual(rulesets(processes), expected_processes)
+        for _, source in expected_processes:
+            self.assertGreater(self.position(source), self.position("/gfw.txt"))
+            self.assertLess(self.position(source), self.position("/ChinaCompanyIp.list"))
 
     def test_openai_overrides_are_inlined_before_process_and_shared_rules(self):
         block = self.text.split("; BEGIN OPENAI AI OVERRIDES\n", 1)[1]
@@ -381,7 +394,7 @@ class ConfigTests(unittest.TestCase):
                 self.assertEqual(first_match(self.inline, domain), expected)
         for process in ("WeChat.exe", "Weixin", "com.tencent.mm", "com.taobao.taobao"):
             with self.subTest(process=process):
-                self.assertEqual(first_match(self.inline, "stun.l.google.com", process), "DIRECT")
+                self.assertEqual(first_match(self.inline, "stun.l.google.com", process), AI)
         self.assertEqual(first_match(self.inline, "api.snssdk.com", "com.zhiliaoapp.musically"), MEDIA)
         self.assertEqual(first_match(self.inline, "unmatched.example", "com.android.vending"), NODE)
 
@@ -391,7 +404,7 @@ class ConfigTests(unittest.TestCase):
                       "/global.list", "/Google.list", "/ChinaDomain.list", "[]FINAL"):
             self.assertLess(block, self.position(guard), guard)
         anthropic_rules = [(policy, rule) for policy, rule in self.inline
-                           if policy == AI and ("anthropic" in rule or "claude" in rule)]
+                           if "anthropic" in rule or "claude" in rule]
         self.assertEqual(len(anthropic_rules), 14)
         for policy, rule in anthropic_rules:
             self.assertEqual(policy, AI, rule)
@@ -414,6 +427,15 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(unrelated=domain):
                 self.assertNotEqual(first_match(self.inline, domain), AI)
 
+    def test_overseas_destinations_precede_domestic_process_fallbacks(self):
+        for process in ("WeChat.exe", "QQ.exe", "com.tencent.mm", "com.taobao.taobao"):
+            for domain, expected in (("claude.com", AI), ("gemini.google.com", AI),
+                                     ("accounts.google.com", AI), ("linux.sb", NODE),
+                                     ("unrelated.auth0.com", NODE),
+                                     ("services.googleapis.cn", NODE)):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.inline, domain, process), expected)
+
     def test_inline_rules_survive_client_conversion(self):
         # Clash Party's converter keeps only TYPE,VALUE from an inline rule and
         # appends the policy: a third field (no-resolve) is dropped, and on
@@ -424,36 +446,94 @@ class ConfigTests(unittest.TestCase):
             self.assertLessEqual(len(fields), 3, rule)
             self.assertNotIn(fields[0], ("AND", "OR", "NOT"), rule)
 
-    def test_quic_override_covers_pinned_ai_domains(self):
-        text = QUIC_OVERRIDE.read_text(encoding="utf-8-sig")
-        suffixes = ["openai.com", "chatgpt.com", "chat.com", "sora.com",
-                    "oaistatic.com", "oaiusercontent.com", "oaistatsig.com",
-                    "openaimerge.com", "claude.ai", "claude.com", "claude.app",
-                    "claude.dev", "claude.new", "claude.site", "anthropic.com",
-                    "claudeusercontent.com", "claudemcpclient.com",
-                    "claudemcpcontent.com"]
-        exact = ["cdn.platform.openai.com", "anthropic.auth0.com",
-                 "anthropic.com.cdn.cloudflare.net",
-                 "servd-anthropic-website.b-cdn.net", "anthropic-com.ghost.io"]
-        for name, expected in (("suffixes", suffixes), ("exact", exact)):
-            block = re.search(name + r"\s*=\s*\[([^\]]*)\]", text)
-            self.assertIsNotNone(block, name)
-            self.assertEqual(sorted(re.findall(r'"([^"]+)"', block.group(1))),
-                             sorted(expected), name)
-        # Both map templates must produce AND/REJECT rules; the domain sets
-        # themselves are already compared element-wise above.
-        templates = re.findall(
-            r"AND,\(\(NETWORK,UDP\),\(DST-PORT,443\),\(DOMAIN(?:-SUFFIX)?,\$\{d\}\)\),REJECT",
-            text)
-        self.assertEqual(len(templates), 2)
-        self.assertIn('r.startsWith("DOMAIN,anthropic-com.ghost.io,")', text)
-        for domain in [*suffixes, *exact]:
-            if domain == "cdn.platform.openai.com":
-                continue  # covered by the aggregated AI list, not inline
-            with self.subTest(domain=domain):
-                self.assertEqual(first_match(self.inline, domain), AI)
+    def apply_quic_override(self, config, repeats=1):
+        script = QUIC_OVERRIDE.read_text(encoding="utf-8-sig")
+        runner = script + """
+const config = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+for (let i = 0; i < REPEATS; ++i) main(config);
+process.stdout.write(JSON.stringify(config));
+""".replace("REPEATS", str(repeats))
+        result = subprocess.run(["node", "-e", runner], input=json.dumps(config),
+                                capture_output=True, text=True, encoding="utf-8",
+                                timeout=10, check=True)
+        return json.loads(result.stdout)
 
-    def test_public_stun_uses_ai_group_with_domestic_process_exceptions(self):
+    def test_quic_override_covers_pinned_ai_domains(self):
+        original = [f"{rule},{policy}" for policy, rule in self.inline]
+        config = {"rules": original, "dns": {"enable": True}}
+        output = self.apply_quic_override(config)
+        rules = output["rules"]
+        self.assertEqual(output["dns"], config["dns"])
+        # Acceptance cases include the shared Claude login challenge.
+        for domain in ("claude.ai", "anthropic.auth0.com",
+                       "challenges.cloudflare.com", "openai.com"):
+            kind = "DOMAIN-SUFFIX" if domain in ("claude.ai", "openai.com") else "DOMAIN"
+            guard = f"AND,((NETWORK,UDP),({kind},{domain})),REJECT"
+            self.assertIn(guard, rules)
+        expected_guards = []
+        for policy, rule in self.inline:
+            if policy not in ("DIRECT", "REJECT"):
+                guard = ("NETWORK,UDP,REJECT" if rule in ("FINAL", "MATCH") else
+                         f"AND,((NETWORK,UDP),({rule})),REJECT")
+                expected_guards.append(guard)
+                self.assertEqual(rules[rules.index(f"{rule},{policy}") + 1], guard)
+        self.assertEqual([r for r in rules if r in expected_guards], expected_guards)
+        self.assertEqual([r for r in rules if r not in expected_guards], original)
+        self.assertEqual(self.apply_quic_override(output), output)
+
+    def test_quic_override_works_without_anthropic_anchor(self):
+        pin = f"DOMAIN,challenges.cloudflare.com,{AI}"
+        config = {"rules": [pin, "PROCESS-NAME,WeChat.exe,DIRECT", "MATCH,DIRECT"]}
+        guard = "AND,((NETWORK,UDP),(DOMAIN,challenges.cloudflare.com)),REJECT"
+        expected = {"rules": [pin, guard, *config["rules"][1:]]}
+        self.assertEqual(self.apply_quic_override(config, repeats=2), expected)
+        unrelated = {"rules": ["DOMAIN,example.org,DIRECT", "MATCH,DIRECT"]}
+        self.assertEqual(self.apply_quic_override(unrelated), unrelated)
+        self.assertEqual(self.apply_quic_override({}), {"rules": []})
+
+    def test_override_keeps_proxy_groups_closed_and_preserves_explicit_rejects(self):
+        config = {"proxy-groups": [
+            {"name": AI, "proxies": [NODE, "DIRECT"]},
+            {"name": NODE, "proxies": ["automatic", "DIRECT", "local-direct"]},
+            {"name": SOCIAL, "proxies": ["DIRECT"], "use": ["subscription"]},
+            {"name": APPLE, "proxies": ["DIRECT", NODE]},
+            {"name": "automatic", "proxies": ["DIRECT", "local-direct"]},
+        ], "proxies": [{"name": "local-direct", "type": "direct"}],
+            "rules": ["NETWORK,UDP,REJECT", f"MATCH,{AI}"]}
+        output = self.apply_quic_override(config, repeats=2)
+        self.assertEqual(output["proxy-groups"][0]["proxies"], [NODE])
+        self.assertEqual(output["proxy-groups"][1]["proxies"], ["automatic"])
+        self.assertEqual(output["proxy-groups"][2]["proxies"], [])
+        self.assertEqual(output["proxy-groups"][3], config["proxy-groups"][3])
+        self.assertEqual(output["proxy-groups"][4]["proxies"], ["REJECT"])
+        self.assertEqual(output["rules"], ["NETWORK,UDP,REJECT", f"MATCH,{AI}", "NETWORK,UDP,REJECT"])
+
+    def test_override_restores_converter_dropped_no_resolve(self):
+        config = {"rules": [f"IP-CIDR,203.0.113.8/32,{AI}",
+                            f"IP-CIDR6,2001:db8::/32,{AI}", "GEOIP,CN,DIRECT"]}
+        output = self.apply_quic_override(config, repeats=2)
+        self.assertEqual(output["rules"], [
+            f"IP-CIDR,203.0.113.8/32,{AI},no-resolve",
+            "AND,((NETWORK,UDP),(IP-CIDR,203.0.113.8/32,no-resolve)),REJECT",
+            f"IP-CIDR6,2001:db8::/32,{AI},no-resolve",
+            "AND,((NETWORK,UDP),(IP-CIDR6,2001:db8::/32,no-resolve)),REJECT",
+            "GEOIP,CN,DIRECT,no-resolve",
+        ])
+
+    def test_vless_udp_is_enabled_without_rewriting_transport_or_encoding(self):
+        nodes = [
+            {"name": "vless-tcp", "type": "vless", "udp": False, "network": "tcp"},
+            {"name": "vless-ws", "type": "vless", "network": "ws", "packet-encoding": "packetaddr"},
+            {"name": "vless-xudp", "type": "vless", "udp": True, "packet-encoding": "xudp"},
+            {"name": "http-only", "type": "http", "udp": False},
+            {"name": "socks-only", "type": "socks5", "udp": False},
+        ]
+        output = self.apply_quic_override({"proxies": nodes}, repeats=2)
+        for index in range(3):
+            self.assertEqual(output["proxies"][index], {**nodes[index], "udp": True})
+        self.assertEqual(output["proxies"][3:], nodes[3:])
+
+    def test_public_stun_uses_ai_before_domestic_process_fallbacks(self):
         for domain in ("stun.l.google.com", "stun1.l.google.com", "stun2.l.google.com",
                        "stun3.l.google.com", "stun4.l.google.com", "stun.cloudflare.com",
                        "global.stun.twilio.com", "stun.stunprotocol.org"):
@@ -461,7 +541,7 @@ class ConfigTests(unittest.TestCase):
                 with self.subTest(domain=domain, process=process):
                     self.assertEqual(first_match(self.inline, domain, process), AI)
             with self.subTest(domestic=domain):
-                self.assertEqual(first_match(self.inline, domain, "WeChat.exe"), "DIRECT")
+                self.assertEqual(first_match(self.inline, domain, "WeChat.exe"), AI)
 
     def test_game_platform_non_steam_traffic_follows_game_group(self):
         # Store, community, UGC, Steam China, Epic and the console platforms keep
@@ -726,10 +806,10 @@ class LiveRulesTests(unittest.TestCase):
                 self.assertEqual(first_match(self.expanded, "", "WeChat.exe",
                                              str(network.network_address)), AI)
 
-    def test_domestic_process_precedes_public_stun(self):
+    def test_public_stun_precedes_domestic_process_fallback(self):
         for process in ("WeChat.exe", "Weixin", "com.tencent.mm", "com.taobao.taobao"):
             with self.subTest(process=process):
-                self.assertEqual(first_match(self.expanded, "stun.l.google.com", process), "DIRECT")
+                self.assertEqual(first_match(self.expanded, "stun.l.google.com", process), AI)
 
     def test_tiktok_process_precedes_shared_domestic_domain(self):
         self.assertEqual(first_match(self.expanded, "api.snssdk.com", "com.zhiliaoapp.musically"), MEDIA)

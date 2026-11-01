@@ -1,0 +1,2 @@
+# Keep no-resolve inside a native classical provider: MiSub drops inline extras.
+GEOIP,CN,no-resolve
