@@ -22,6 +22,14 @@ VLESS UDP 转发时开启 MiSub 的 UDP 转发选项。步骤见 [`docs/misub.md
   use DIRECT. Steam's location-detection and download hosts are also DIRECT and
   stay that way when the game group is switched to a node (see below).
 - Overseas AI, social, streaming and game services use their respective groups.
+- Google Search, account login and shared Google APIs use node selection,
+  including `google.com`, `www.google.com`, `accounts.google.com`,
+  `myaccount.google.com`, `ogs.google.com`, `apis.google.com`,
+  `oauth2.googleapis.com` and `accounts.googleusercontent.com`. Gemini,
+  AI Studio and dedicated Google AI APIs keep using AI. Domain rules cannot
+  distinguish a Gemini login from another site's Google login, or Google's
+  `/sorry` path from ordinary search. These shared hosts therefore stay out
+  of the AI group; align the two exits manually if a specific login requires it.
 - OpenAI traffic is pinned inline to AI immediately after the LAN rules and
   before domestic process overrides. ChatGPT, Codex, API, authentication, file
   transfers, updates, documentation, status and WebSocket subdomains are covered

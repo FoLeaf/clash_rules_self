@@ -401,7 +401,7 @@ class ConfigTests(unittest.TestCase):
             "api.cloudflare.com": NODE,
             "d1.awsstatic.com": NODE,
             "browser-intake-datadoghq.com": NODE,
-            "accounts.google.com": AI,
+            "accounts.google.com": NODE,
             "unrelated.auth0.com": NODE,
             "unmatched.example": FALLBACK,
         }
@@ -446,11 +446,33 @@ class ConfigTests(unittest.TestCase):
     def test_overseas_destinations_precede_domestic_process_fallbacks(self):
         for process in ("WeChat.exe", "QQ.exe", "com.tencent.mm", "com.taobao.taobao"):
             for domain, expected in (("claude.com", AI), ("gemini.google.com", AI),
-                                     ("accounts.google.com", AI), ("linux.sb", NODE),
+                                     ("accounts.google.com", NODE), ("linux.sb", NODE),
                                      ("unrelated.auth0.com", NODE),
                                      ("services.googleapis.cn", NODE)):
                 with self.subTest(domain=domain, process=process):
                     self.assertEqual(first_match(self.inline, domain, process), expected)
+
+    def test_shared_google_domains_use_node_selection(self):
+        # Search and Google identity are shared by non-AI services. A Gemini
+        # login must not pin every site's Google login to the AI exit.
+        shared = ("google.com", "www.google.com", "accounts.google.com",
+                  "myaccount.google.com", "ogs.google.com", "apis.google.com",
+                  "oauth2.googleapis.com", "accounts.googleusercontent.com")
+        for domain in shared:
+            for process in (None, "firefox.exe", "WeChat.exe", "com.tencent.mm"):
+                with self.subTest(domain=domain, process=process):
+                    self.assertEqual(first_match(self.inline, domain, process), NODE)
+            with self.subTest(normalized=domain):
+                self.assertEqual(first_match(self.inline, domain.upper() + "."), NODE)
+        ai_rules = [(policy, rule) for policy, rule in self.inline if policy == AI]
+        aggregate = [(AI, rule) for rule in active_lines(
+            (ROOT / "rules/overseas-ai.list").read_text(encoding="utf-8"))]
+        for domain in ("gemini.google.com", "aistudio.google.com",
+                       "generativelanguage.googleapis.com"):
+            with self.subTest(ai_service=domain):
+                self.assertEqual(first_match(ai_rules + aggregate, domain), AI)
+        for domain in shared:
+            self.assertIsNone(first_match(ai_rules + aggregate, domain), domain)
 
     def test_inline_rules_survive_client_conversion(self):
         # Clash Party's converter keeps only TYPE,VALUE from an inline rule and
@@ -761,7 +783,14 @@ class LiveRulesTests(unittest.TestCase):
             "api.openai.com": AI,
             "gemini.google.com": AI,
             "generativelanguage.googleapis.com": AI,
-            "accounts.google.com": AI,
+            "accounts.google.com": NODE,
+            "google.com": NODE,
+            "www.google.com": NODE,
+            "myaccount.google.com": NODE,
+            "ogs.google.com": NODE,
+            "apis.google.com": NODE,
+            "oauth2.googleapis.com": NODE,
+            "accounts.googleusercontent.com": NODE,
             "challenges.cloudflare.com": AI,
             "www.recaptcha.net": NODE,
             "api.cloudflare.com": NODE,
