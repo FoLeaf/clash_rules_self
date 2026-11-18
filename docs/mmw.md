@@ -47,6 +47,13 @@ ssh -p 42387 root@107.174.123.74 \
 
 ## 几个坑
 
+- **`*.txt.yaml` 规则集必须带 `format: text`**。转换器把 Loyalsoldier 的明文列表存成
+  `direct.txt.yaml`/`gfw.txt.yaml`/`cncidr.txt.yaml`，但没写 `format`，mihomo 就按 YAML
+  去解析纯文本，**规则数静默变成 0**（实测 `/providers/rules` 里三张表都是 0 条，
+  补上后变成 110243 / 4453 / 9640）。后果很隐蔽：`direct.txt` 里 11 万条域名只有 625 条
+  同时出现在 `ChinaDomain` 里，其余全部漏到代理；`gfw.txt` 永不命中；`cncidr.txt` 的
+  国内 IP 兜底整段消失。`tools/build_mmw_template.py` 会自动补齐这三处，客户端侧
+  `override/pin-google-single-egress.js` 也会按路径兜一层。
 - **`proxies` 不用带**。实测模板里放 3 个节点，产出仍是 4 个：mmw 每次渲染都用自己节点表里的
   节点覆盖，并同步分组里的节点名。仓库里这份因此写成 `proxies: []`，避免把节点凭据推到公开仓库。
 - **规则段的 `RULE-SET` tag 必须和 `rule-providers` 的键一致**。`Google.list` 对应的 tag 是

@@ -56,6 +56,22 @@ class MmwTemplateTests(unittest.TestCase):
         self.assertTrue(used)
         self.assertEqual(used - set(builder.provider_urls(self.text)), set())
 
+    def test_text_rule_sets_declare_format(self):
+        # mihomo parses *.txt.yaml as YAML. Without format: text these three
+        # Loyalsoldier lists load zero rules (measured: 0/0/0 instead of
+        # 110243/4453/9640), domestic domains fall through to the proxy and the
+        # CN CIDR fallback disappears — all without a single error.
+        block = self.text.split("\nrule-providers:\n", 1)[1]
+        chunks, current = {}, None
+        for line in block.splitlines():
+            if line.startswith("  ") and not line.startswith("    ") and line.strip().endswith(":"):
+                current = line.strip()[:-1]
+                chunks[current] = []
+            elif current:
+                chunks[current].append(line)
+        for name in ("direct.txt", "gfw.txt", "cncidr.txt"):
+            self.assertIn("format: text", "\n".join(chunks[name]), name)
+
     def test_google_and_mediav_order(self):
         position = {rule: index for index, rule in enumerate(self.rules)}
         self.assertLess(position["DOMAIN-SUFFIX,mediav.com,REJECT"],

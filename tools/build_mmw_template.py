@@ -88,9 +88,34 @@ def strip_proxies(text):
     template carrying three nodes still renders four), so the template does not
     need them — and the published copy must not carry node credentials.
     """
-    start = text.index("\nproxies:\n") + 1
+    start = text.index("\nproxies:\n") + 1 if "\nproxies:\n" in text else None
+    if start is None:
+        return text  # already stripped
     end = text.index("\nproxy-groups:\n") + 1
     return text[:start] + "proxies: []\n" + text[end:]
+
+
+def normalize_provider_format(text):
+    """Add format: text to plain-text rule sets stored as *.txt.yaml.
+
+    The converter that produced the base config writes Loyalsoldier's
+    ``direct.txt``/``gfw.txt``/``cncidr.txt`` to ``<name>.txt.yaml`` without a
+    ``format`` field. mihomo then parses those 110k/4k/9k plain-text lines as
+    YAML and silently loads zero rules: domestic domains fall through to the
+    proxy, GFW rules never match, and the CN CIDR fallback disappears.
+    """
+    block = re.compile(r"(?m)^  (?P<name>[A-Za-z0-9_.-]+):\n(?P<body>(?:    .*\n)+)")
+
+    def fix(match):
+        body = match.group("body")
+        if "format:" in body or ".txt.yaml" not in body:
+            return match.group(0)
+        return ("  " + match.group("name") + ":\n"
+                + body.replace("    behavior: classical\n",
+                               "    behavior: classical\n    format: text\n", 1))
+
+    head, tail = text.split("\nrule-providers:\n", 1)
+    return head + "\nrule-providers:\n" + block.sub(fix, tail)
 
 
 def main():
@@ -117,6 +142,7 @@ def main():
     head, rest = base_text.split("\nrules:\n", 1)
     _, tail = rest.split("\nrule-providers:\n", 1)
     output = head + "\nrules:\n" + "\n".join(compiled) + "\nrule-providers:\n" + tail
+    output = normalize_provider_format(output)
     if args.strip_proxies:
         output = strip_proxies(output)
     args.output.write_text(output, encoding="utf-8", newline="\n")
