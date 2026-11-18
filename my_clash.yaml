@@ -1,0 +1,958 @@
+port: 7890
+socks-port: 7891
+allow-lan: true
+mode: Rule
+log-level: info
+dns:
+  default-nameserver:
+    - tls://223.5.5.5
+  enable: true
+  enhanced-mode: fake-ip
+  ipv6: true
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  nameserver-policy:
+    geosite:cn,private:
+      - https://doh.pub/dns-query
+      - https://dns.alidns.com/dns-query
+    geosite:geolocation-!cn:
+      - https://dns.cloudflare.com/dns-query
+      - https://dns.google/dns-query
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  respect-rules: true
+proxies: []
+proxy-groups:
+  - name: 🚀 节点选择
+    type: select
+    proxies:
+      - ♻️ 自动选择
+      - ⚖️ 负载均衡
+      - DIRECT
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: ♻️ 自动选择
+    type: url-test
+    proxies:
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+  - name: ⚖️ 负载均衡
+    type: load-balance
+    proxies:
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+  - name: 📲 电报消息
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - DIRECT
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🤖 AI
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - DIRECT
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🎬 国外流媒体
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - DIRECT
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🌐 国外社交
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - DIRECT
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: Ⓜ️ 微软服务
+    type: select
+    proxies:
+      - DIRECT
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🍎 苹果服务
+    type: select
+    proxies:
+      - DIRECT
+      - 🚀 节点选择
+      - ♻️ 自动选择
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🎮 游戏平台
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - DIRECT
+      - ♻️ 自动选择
+      - 🇺🇸 US-PPFLIGHT-IPV6-备用
+      - 🇸🇬 SG-AWS
+      - 🇺🇸 US-MoeCloud
+      - 🇺🇸 US-PPFLIGHT
+  - name: 🐟 漏网之鱼
+    type: select
+    proxies:
+      - 🚀 节点选择
+      - DIRECT
+      - ♻️ 自动选择
+rules:
+  - RULE-SET,LocalAreaNetwork,DIRECT
+  - DOMAIN-SUFFIX,mediav.com,REJECT
+  - DOMAIN-SUFFIX,openai.com,🤖 AI
+  - DOMAIN-SUFFIX,openai.com,REJECT
+  - DOMAIN-SUFFIX,chatgpt.com,🤖 AI
+  - DOMAIN-SUFFIX,chatgpt.com,REJECT
+  - DOMAIN-SUFFIX,chat.com,🤖 AI
+  - DOMAIN-SUFFIX,chat.com,REJECT
+  - DOMAIN-SUFFIX,sora.com,🤖 AI
+  - DOMAIN-SUFFIX,sora.com,REJECT
+  - DOMAIN-SUFFIX,oaistatic.com,🤖 AI
+  - DOMAIN-SUFFIX,oaistatic.com,REJECT
+  - DOMAIN-SUFFIX,oaiusercontent.com,🤖 AI
+  - DOMAIN-SUFFIX,oaiusercontent.com,REJECT
+  - DOMAIN-SUFFIX,oaistatsig.com,🤖 AI
+  - DOMAIN-SUFFIX,oaistatsig.com,REJECT
+  - DOMAIN-SUFFIX,openaimerge.com,🤖 AI
+  - DOMAIN-SUFFIX,openaimerge.com,REJECT
+  - DOMAIN-SUFFIX,ct.sendgrid.net,🤖 AI
+  - DOMAIN-SUFFIX,ct.sendgrid.net,REJECT
+  - DOMAIN-SUFFIX,intercom.io,🤖 AI
+  - DOMAIN-SUFFIX,intercom.io,REJECT
+  - DOMAIN-SUFFIX,intercomcdn.com,🤖 AI
+  - DOMAIN-SUFFIX,intercomcdn.com,REJECT
+  - DOMAIN,cdn.workos.com,🤖 AI
+  - DOMAIN,cdn.workos.com,REJECT
+  - DOMAIN,forwarder.workos.com,🤖 AI
+  - DOMAIN,forwarder.workos.com,REJECT
+  - DOMAIN,frontend-apps-multi-region.workos.com,🤖 AI
+  - DOMAIN,frontend-apps-multi-region.workos.com,REJECT
+  - DOMAIN,setup.workos.com,🤖 AI
+  - DOMAIN,setup.workos.com,REJECT
+  - DOMAIN,images.workoscdn.com,🤖 AI
+  - DOMAIN,images.workoscdn.com,REJECT
+  - DOMAIN,workos.imgix.net,🤖 AI
+  - DOMAIN,workos.imgix.net,REJECT
+  - DOMAIN,challenges.cloudflare.com,🤖 AI
+  - DOMAIN,challenges.cloudflare.com,REJECT
+  - DOMAIN,humb.apple.com,🤖 AI
+  - DOMAIN,humb.apple.com,REJECT
+  - DOMAIN,js.stripe.com,🤖 AI
+  - DOMAIN,js.stripe.com,REJECT
+  - DOMAIN,o207216.ingest.sentry.io,🤖 AI
+  - DOMAIN,o207216.ingest.sentry.io,REJECT
+  - DOMAIN,o33249.ingest.sentry.io,🤖 AI
+  - DOMAIN,o33249.ingest.sentry.io,REJECT
+  - DOMAIN,rum.browser-intake-datadoghq.com,🤖 AI
+  - DOMAIN,rum.browser-intake-datadoghq.com,REJECT
+  - DOMAIN-SUFFIX,openai.com.cdn.cloudflare.net,🤖 AI
+  - DOMAIN-SUFFIX,openai.com.cdn.cloudflare.net,REJECT
+  - DOMAIN-SUFFIX,openaiapi-site.azureedge.net,🤖 AI
+  - DOMAIN-SUFFIX,openaiapi-site.azureedge.net,REJECT
+  - DOMAIN,openaicom.imgix.net,🤖 AI
+  - DOMAIN,openaicom.imgix.net,REJECT
+  - DOMAIN,openai-api.arkoselabs.com,🤖 AI
+  - DOMAIN,openai-api.arkoselabs.com,REJECT
+  - DOMAIN,openaiassets.blob.core.windows.net,🤖 AI
+  - DOMAIN,openaiassets.blob.core.windows.net,REJECT
+  - DOMAIN,openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net,🤖 AI
+  - DOMAIN,openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net,REJECT
+  - DOMAIN,openaicomproductionae4b.blob.core.windows.net,🤖 AI
+  - DOMAIN,openaicomproductionae4b.blob.core.windows.net,REJECT
+  - DOMAIN,production-openaicom-storage.azureedge.net,🤖 AI
+  - DOMAIN,production-openaicom-storage.azureedge.net,REJECT
+  - DOMAIN-SUFFIX,chatgpt.livekit.cloud,🤖 AI
+  - DOMAIN-SUFFIX,chatgpt.livekit.cloud,REJECT
+  - DOMAIN-SUFFIX,host.livekit.cloud,🤖 AI
+  - DOMAIN-SUFFIX,host.livekit.cloud,REJECT
+  - DOMAIN-SUFFIX,turn.livekit.cloud,🤖 AI
+  - DOMAIN-SUFFIX,turn.livekit.cloud,REJECT
+  - DOMAIN-SUFFIX,api.statsig.com,🤖 AI
+  - DOMAIN-SUFFIX,api.statsig.com,REJECT
+  - DOMAIN-SUFFIX,events.statsigapi.net,🤖 AI
+  - DOMAIN-SUFFIX,events.statsigapi.net,REJECT
+  - DOMAIN-SUFFIX,featuregates.org,🤖 AI
+  - DOMAIN-SUFFIX,featuregates.org,REJECT
+  - DOMAIN-SUFFIX,client-api.arkoselabs.com,🤖 AI
+  - DOMAIN-SUFFIX,client-api.arkoselabs.com,REJECT
+  - RULE-SET,openai-ai,🤖 AI
+  - RULE-SET,openai-ai,REJECT
+  - DOMAIN-SUFFIX,claude.ai,🤖 AI
+  - DOMAIN-SUFFIX,claude.ai,REJECT
+  - DOMAIN-SUFFIX,claude.com,🤖 AI
+  - DOMAIN-SUFFIX,claude.com,REJECT
+  - DOMAIN-SUFFIX,claude.app,🤖 AI
+  - DOMAIN-SUFFIX,claude.app,REJECT
+  - DOMAIN-SUFFIX,claude.dev,🤖 AI
+  - DOMAIN-SUFFIX,claude.dev,REJECT
+  - DOMAIN-SUFFIX,claude.new,🤖 AI
+  - DOMAIN-SUFFIX,claude.new,REJECT
+  - DOMAIN-SUFFIX,claude.site,🤖 AI
+  - DOMAIN-SUFFIX,claude.site,REJECT
+  - DOMAIN-SUFFIX,anthropic.com,🤖 AI
+  - DOMAIN-SUFFIX,anthropic.com,REJECT
+  - DOMAIN-SUFFIX,claudeusercontent.com,🤖 AI
+  - DOMAIN-SUFFIX,claudeusercontent.com,REJECT
+  - DOMAIN-SUFFIX,claudemcpclient.com,🤖 AI
+  - DOMAIN-SUFFIX,claudemcpclient.com,REJECT
+  - DOMAIN-SUFFIX,claudemcpcontent.com,🤖 AI
+  - DOMAIN-SUFFIX,claudemcpcontent.com,REJECT
+  - DOMAIN,anthropic.auth0.com,🤖 AI
+  - DOMAIN,anthropic.auth0.com,REJECT
+  - DOMAIN,anthropic.com.cdn.cloudflare.net,🤖 AI
+  - DOMAIN,anthropic.com.cdn.cloudflare.net,REJECT
+  - DOMAIN,servd-anthropic-website.b-cdn.net,🤖 AI
+  - DOMAIN,servd-anthropic-website.b-cdn.net,REJECT
+  - DOMAIN,anthropic-com.ghost.io,🤖 AI
+  - DOMAIN,anthropic-com.ghost.io,REJECT
+  - PROCESS-NAME,com.zhiliaoapp.musically,🎬 国外流媒体
+  - PROCESS-NAME,com.zhiliaoapp.musically,REJECT
+  - DOMAIN,dldir1.qq.com,DIRECT
+  - DOMAIN,slife.xy-asia.com,DIRECT
+  - DOMAIN,soup.v.qq.com,DIRECT
+  - DOMAIN,vweixinf.tc.qq.com,DIRECT
+  - DOMAIN,wup.imtt.qq.com,DIRECT
+  - DOMAIN-SUFFIX,iot-tencent.com,DIRECT
+  - DOMAIN-SUFFIX,lbs.gtimg.com,DIRECT
+  - DOMAIN-SUFFIX,map.qq.com,DIRECT
+  - DOMAIN-SUFFIX,tenpay.com,DIRECT
+  - DOMAIN-SUFFIX,up-hl.3g.qq.com,DIRECT
+  - DOMAIN-SUFFIX,vweixinthumb.tc.qq.com,DIRECT
+  - DOMAIN-SUFFIX,weixinsxy.com,DIRECT
+  - DOMAIN-SUFFIX,wx.gtimg.com,DIRECT
+  - DOMAIN-SUFFIX,wxapp.tc.qq.com,DIRECT
+  - DOMAIN-SUFFIX,yun-hl.3g.qq.com,DIRECT
+  - DOMAIN-SUFFIX,servicewechat.com,DIRECT
+  - DOMAIN-SUFFIX,weixinbridge.com,DIRECT
+  - DOMAIN-SUFFIX,wechatos.net,DIRECT
+  - DOMAIN-SUFFIX,wechatlegal.net,DIRECT
+  - DOMAIN-SUFFIX,wechatpay.com,DIRECT
+  - DOMAIN-SUFFIX,qlogo.cn,DIRECT
+  - DOMAIN-SUFFIX,qpic.cn,DIRECT
+  - DOMAIN-SUFFIX,weixin.qq.com,DIRECT
+  - DOMAIN-SUFFIX,wx.qq.com,DIRECT
+  - DOMAIN-SUFFIX,wxs.qq.com,DIRECT
+  - DOMAIN-SUFFIX,wechat.com,DIRECT
+  - DOMAIN-SUFFIX,weixin.com,DIRECT
+  - DOMAIN,weixin110.qq.com,DIRECT
+  - DOMAIN,btrace.qq.com,DIRECT
+  - DOMAIN,apd-pcdnwxlogin.teg.tencent-cloud.net,DIRECT
+  - DOMAIN,sdkinit.taobao.com,DIRECT
+  - DOMAIN-SUFFIX,adash-c.m.taobao.com,DIRECT
+  - DOMAIN-SUFFIX,adash-c.ut.taobao.com,DIRECT
+  - DOMAIN-SUFFIX,adashx4yt.m.taobao.com,DIRECT
+  - DOMAIN-SUFFIX,adashxgc.ut.taobao.com,DIRECT
+  - DOMAIN-SUFFIX,alipaylog.com,DIRECT
+  - DOMAIN-SUFFIX,mmstat.com,DIRECT
+  - DOMAIN-SUFFIX,taobao.com,DIRECT
+  - DOMAIN-SUFFIX,tmall.com,DIRECT
+  - DOMAIN-SUFFIX,alicdn.com,DIRECT
+  - DOMAIN-SUFFIX,alipay.com,DIRECT
+  - DOMAIN-SUFFIX,alipayobjects.com,DIRECT
+  - DOMAIN-SUFFIX,aliyun.com,DIRECT
+  - DOMAIN-SUFFIX,aliyuncs.com,DIRECT
+  - DOMAIN-SUFFIX,umeng.com,DIRECT
+  - DOMAIN-SUFFIX,umengcloud.com,DIRECT
+  - DOMAIN-SUFFIX,jpush.cn,DIRECT
+  - DOMAIN-SUFFIX,jiguang.cn,DIRECT
+  - DOMAIN-SUFFIX,getui.com,DIRECT
+  - DOMAIN-SUFFIX,igexin.com,DIRECT
+  - DOMAIN-SUFFIX,geetest.com,DIRECT
+  - DOMAIN-SUFFIX,ishumei.com,DIRECT
+  - DOMAIN-SUFFIX,fengkongcloud.com,DIRECT
+  - DOMAIN-SUFFIX,mob.com,DIRECT
+  - DOMAIN-SUFFIX,deepseek.com,DIRECT
+  - DOMAIN-SUFFIX,kimi.com,DIRECT
+  - DOMAIN-SUFFIX,moonshot.cn,DIRECT
+  - DOMAIN-SUFFIX,doubao.com,DIRECT
+  - DOMAIN-SUFFIX,qwen.ai,DIRECT
+  - DOMAIN-SUFFIX,zhipuai.cn,DIRECT
+  - DOMAIN-SUFFIX,bigmodel.cn,DIRECT
+  - DOMAIN-SUFFIX,coze.cn,DIRECT
+  - DOMAIN-SUFFIX,trae.cn,DIRECT
+  - DOMAIN-SUFFIX,snssdk.com,DIRECT
+  - DOMAIN-SUFFIX,isnssdk.com,DIRECT
+  - DOMAIN-SUFFIX,douyin.com,DIRECT
+  - DOMAIN,stun.l.google.com,🤖 AI
+  - DOMAIN,stun.l.google.com,REJECT
+  - DOMAIN,stun1.l.google.com,🤖 AI
+  - DOMAIN,stun1.l.google.com,REJECT
+  - DOMAIN,stun2.l.google.com,🤖 AI
+  - DOMAIN,stun2.l.google.com,REJECT
+  - DOMAIN,stun3.l.google.com,🤖 AI
+  - DOMAIN,stun3.l.google.com,REJECT
+  - DOMAIN,stun4.l.google.com,🤖 AI
+  - DOMAIN,stun4.l.google.com,REJECT
+  - DOMAIN-SUFFIX,stun.cloudflare.com,🤖 AI
+  - DOMAIN-SUFFIX,stun.cloudflare.com,REJECT
+  - DOMAIN,global.stun.twilio.com,🤖 AI
+  - DOMAIN,global.stun.twilio.com,REJECT
+  - DOMAIN-SUFFIX,stunprotocol.org,🤖 AI
+  - DOMAIN-SUFFIX,stunprotocol.org,REJECT
+  - DOMAIN-SUFFIX,linux.sb,🚀 节点选择
+  - DOMAIN-SUFFIX,linux.sb,REJECT
+  - PROCESS-NAME,com.android.vending,🚀 节点选择
+  - PROCESS-NAME,com.android.vending,REJECT
+  - DOMAIN-SUFFIX,googleapis.cn,🚀 节点选择
+  - DOMAIN-SUFFIX,googleapis.cn,REJECT
+  - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,🚀 节点选择
+  - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,REJECT
+  - DOMAIN-SUFFIX,gvt1.com,🚀 节点选择
+  - DOMAIN-SUFFIX,gvt1.com,REJECT
+  - DOMAIN-SUFFIX,gvt2.com,🚀 节点选择
+  - DOMAIN-SUFFIX,gvt2.com,REJECT
+  - DOMAIN-SUFFIX,gvt3.com,🚀 节点选择
+  - DOMAIN-SUFFIX,gvt3.com,REJECT
+  - DOMAIN-SUFFIX,ggpht.com,🚀 节点选择
+  - DOMAIN-SUFFIX,ggpht.com,REJECT
+  - DOMAIN,storage.googleapis.com,🚀 节点选择
+  - DOMAIN,storage.googleapis.com,REJECT
+  - DOMAIN-SUFFIX,play.googleapis.com,🚀 节点选择
+  - DOMAIN-SUFFIX,play.googleapis.com,REJECT
+  - DOMAIN-SUFFIX,play-fe.googleapis.com,🚀 节点选择
+  - DOMAIN-SUFFIX,play-fe.googleapis.com,REJECT
+  - DOMAIN-SUFFIX,android.googleapis.com,🚀 节点选择
+  - DOMAIN-SUFFIX,android.googleapis.com,REJECT
+  - DOMAIN-SUFFIX,play-lh.googleusercontent.com,🚀 节点选择
+  - DOMAIN-SUFFIX,play-lh.googleusercontent.com,REJECT
+  - DOMAIN,android.clients.google.com,🚀 节点选择
+  - DOMAIN,android.clients.google.com,REJECT
+  - DOMAIN-SUFFIX,recaptcha.net,🚀 节点选择
+  - DOMAIN-SUFFIX,recaptcha.net,REJECT
+  - DOMAIN-SUFFIX,recaptcha.google.com,🚀 节点选择
+  - DOMAIN-SUFFIX,recaptcha.google.com,REJECT
+  - DOMAIN-SUFFIX,auth0.com,🚀 节点选择
+  - DOMAIN-SUFFIX,auth0.com,REJECT
+  - DOMAIN,api.cloudflare.com,🚀 节点选择
+  - DOMAIN,api.cloudflare.com,REJECT
+  - DOMAIN,static.cloudflareinsights.com,🚀 节点选择
+  - DOMAIN,static.cloudflareinsights.com,REJECT
+  - DOMAIN-SUFFIX,sentry.io,🚀 节点选择
+  - DOMAIN-SUFFIX,sentry.io,REJECT
+  - DOMAIN-SUFFIX,stripe.com,🚀 节点选择
+  - DOMAIN-SUFFIX,stripe.com,REJECT
+  - DOMAIN-SUFFIX,segment.io,🚀 节点选择
+  - DOMAIN-SUFFIX,segment.io,REJECT
+  - DOMAIN-SUFFIX,awsstatic.com,🚀 节点选择
+  - DOMAIN-SUFFIX,awsstatic.com,REJECT
+  - DOMAIN-SUFFIX,awsapps.com,🚀 节点选择
+  - DOMAIN-SUFFIX,awsapps.com,REJECT
+  - DOMAIN-SUFFIX,sso.amazonaws.com,🚀 节点选择
+  - DOMAIN-SUFFIX,sso.amazonaws.com,REJECT
+  - DOMAIN,cognito-identity.us-east-1.amazonaws.com,🚀 节点选择
+  - DOMAIN,cognito-identity.us-east-1.amazonaws.com,REJECT
+  - DOMAIN-SUFFIX,algolia.net,🚀 节点选择
+  - DOMAIN-SUFFIX,algolia.net,REJECT
+  - DOMAIN-SUFFIX,launchdarkly.com,🚀 节点选择
+  - DOMAIN-SUFFIX,launchdarkly.com,REJECT
+  - DOMAIN-SUFFIX,datadoghq.com,🚀 节点选择
+  - DOMAIN-SUFFIX,datadoghq.com,REJECT
+  - DOMAIN-SUFFIX,datadog.com,🚀 节点选择
+  - DOMAIN-SUFFIX,datadog.com,REJECT
+  - DOMAIN-KEYWORD,datadog,🚀 节点选择
+  - DOMAIN-KEYWORD,datadog,REJECT
+  - DOMAIN-KEYWORD,sentry,🚀 节点选择
+  - DOMAIN-KEYWORD,sentry,REJECT
+  - DOMAIN-KEYWORD,sift,🚀 节点选择
+  - DOMAIN-KEYWORD,sift,REJECT
+  - DOMAIN,odc.officeapps.live.com,🚀 节点选择
+  - DOMAIN,odc.officeapps.live.com,REJECT
+  - DOMAIN,location.microsoft.com,🚀 节点选择
+  - DOMAIN,location.microsoft.com,REJECT
+  - DOMAIN,self.events.data.microsoft.com,🚀 节点选择
+  - DOMAIN,self.events.data.microsoft.com,REJECT
+  - DOMAIN-SUFFIX,api.microsoftapp.net,🚀 节点选择
+  - DOMAIN-SUFFIX,api.microsoftapp.net,REJECT
+  - DOMAIN,epicgames-download1.storage.googleapis.com,🎮 游戏平台
+  - DOMAIN,epicgames-download1.storage.googleapis.com,REJECT
+  - DOMAIN-SUFFIX,google.com,🚀 节点选择
+  - DOMAIN-SUFFIX,google.com,REJECT
+  - DOMAIN-SUFFIX,gstatic.com,🚀 节点选择
+  - DOMAIN-SUFFIX,gstatic.com,REJECT
+  - DOMAIN-SUFFIX,googleapis.com,🚀 节点选择
+  - DOMAIN-SUFFIX,googleapis.com,REJECT
+  - DOMAIN,accounts.googleusercontent.com,🚀 节点选择
+  - DOMAIN,accounts.googleusercontent.com,REJECT
+  - RULE-SET,overseas-ai,🤖 AI
+  - RULE-SET,overseas-ai,REJECT
+  - RULE-SET,cn,DIRECT
+  - RULE-SET,YouTube,🎬 国外流媒体
+  - RULE-SET,YouTube,REJECT
+  - RULE-SET,Twitter,🌐 国外社交
+  - RULE-SET,Twitter,REJECT
+  - RULE-SET,Instagram,🌐 国外社交
+  - RULE-SET,Instagram,REJECT
+  - RULE-SET,Facebook,🌐 国外社交
+  - RULE-SET,Facebook,REJECT
+  - RULE-SET,Threads,🌐 国外社交
+  - RULE-SET,Threads,REJECT
+  - RULE-SET,Reddit,🌐 国外社交
+  - RULE-SET,Reddit,REJECT
+  - RULE-SET,Discord,🌐 国外社交
+  - RULE-SET,Discord,REJECT
+  - RULE-SET,Whatsapp,🌐 国外社交
+  - RULE-SET,Whatsapp,REJECT
+  - RULE-SET,Pinterest,🌐 国外社交
+  - RULE-SET,Pinterest,REJECT
+  - RULE-SET,LinkedIn,🌐 国外社交
+  - RULE-SET,LinkedIn,REJECT
+  - RULE-SET,Netflix,🎬 国外流媒体
+  - RULE-SET,Netflix,REJECT
+  - RULE-SET,Disney,🎬 国外流媒体
+  - RULE-SET,Disney,REJECT
+  - RULE-SET,Spotify,🎬 国外流媒体
+  - RULE-SET,Spotify,REJECT
+  - RULE-SET,TikTok,🎬 国外流媒体
+  - RULE-SET,TikTok,REJECT
+  - RULE-SET,PrimeVideo,🎬 国外流媒体
+  - RULE-SET,PrimeVideo,REJECT
+  - RULE-SET,HBO,🎬 国外流媒体
+  - RULE-SET,HBO,REJECT
+  - RULE-SET,HBOUSA,🎬 国外流媒体
+  - RULE-SET,HBOUSA,REJECT
+  - RULE-SET,Twitch,🎬 国外流媒体
+  - RULE-SET,Twitch,REJECT
+  - RULE-SET,AppleTV,🎬 国外流媒体
+  - RULE-SET,AppleTV,REJECT
+  - RULE-SET,Bahamut,🎬 国外流媒体
+  - RULE-SET,Bahamut,REJECT
+  - RULE-SET,BBC,🎬 国外流媒体
+  - RULE-SET,BBC,REJECT
+  - RULE-SET,DAZN,🎬 国外流媒体
+  - RULE-SET,DAZN,REJECT
+  - RULE-SET,Emby,🎬 国外流媒体
+  - RULE-SET,Emby,REJECT
+  - RULE-SET,Telegram,📲 电报消息
+  - RULE-SET,Telegram,REJECT
+  - RULE-SET,GoogleCN,DIRECT
+  - RULE-SET,BilibiliHMT,DIRECT
+  - RULE-SET,Bilibili,DIRECT
+  - RULE-SET,ChinaMedia,DIRECT
+  - RULE-SET,Bing,Ⓜ️ 微软服务
+  - RULE-SET,Bing,REJECT
+  - RULE-SET,OneDrive,Ⓜ️ 微软服务
+  - RULE-SET,OneDrive,REJECT
+  - RULE-SET,Microsoft,Ⓜ️ 微软服务
+  - RULE-SET,Microsoft,REJECT
+  - RULE-SET,Apple,🍎 苹果服务
+  - RULE-SET,Apple,REJECT
+  - DOMAIN-SUFFIX,steamserver.net,DIRECT
+  - DOMAIN-SUFFIX,cm.steampowered.com,DIRECT
+  - DOMAIN-SUFFIX,steamcontent.com,DIRECT
+  - DOMAIN-SUFFIX,content.steamchina.com,DIRECT
+  - DOMAIN-SUFFIX,steamcontent.tnkjmec.com,DIRECT
+  - DOMAIN-SUFFIX,clngaa.com,DIRECT
+  - DOMAIN-SUFFIX,ksyna.com,DIRECT
+  - DOMAIN-SUFFIX,eccdnx.com,DIRECT
+  - DOMAIN-SUFFIX,bscstorage.net,DIRECT
+  - DOMAIN-SUFFIX,pinyuncloud.com,DIRECT
+  - DOMAIN-SUFFIX,pphimalayanrt.com,DIRECT
+  - DOMAIN-SUFFIX,wmsjsteam.com,DIRECT
+  - DOMAIN-SUFFIX,steampowered.com.8686c.com,DIRECT
+  - DOMAIN-SUFFIX,steamstatic.com.8686c.com,DIRECT
+  - DOMAIN,csgo.wmsj.cn,DIRECT
+  - DOMAIN,dota2.wmsj.cn,DIRECT
+  - DOMAIN-SUFFIX,cyngaa.com,DIRECT
+  - DOMAIN-SUFFIX,sycontroller.com,DIRECT
+  - DOMAIN-SUFFIX,gdtstream.com,DIRECT
+  - DOMAIN-SUFFIX,manlaxy.com,DIRECT
+  - DOMAIN-SUFFIX,steam.nsclouds.cn,DIRECT
+  - DOMAIN-SUFFIX,steamusercontent.com,🎮 游戏平台
+  - DOMAIN-SUFFIX,steamusercontent.com,REJECT
+  - DOMAIN-SUFFIX,steamchina.com,🎮 游戏平台
+  - DOMAIN-SUFFIX,steamchina.com,REJECT
+  - RULE-SET,SteamCN,🎮 游戏平台
+  - RULE-SET,SteamCN,REJECT
+  - RULE-SET,Epic,🎮 游戏平台
+  - RULE-SET,Epic,REJECT
+  - RULE-SET,Steam,🎮 游戏平台
+  - RULE-SET,Steam,REJECT
+  - RULE-SET,Nintendo,🎮 游戏平台
+  - RULE-SET,Nintendo,REJECT
+  - RULE-SET,PlayStation,🎮 游戏平台
+  - RULE-SET,PlayStation,REJECT
+  - RULE-SET,ChinaDomain,DIRECT
+  - RULE-SET,direct.txt,DIRECT
+  - RULE-SET,Google,🚀 节点选择
+  - RULE-SET,Google,REJECT
+  - RULE-SET,gfw.txt,🚀 节点选择
+  - RULE-SET,gfw.txt,REJECT
+  - PROCESS-NAME,WeChat.exe,DIRECT
+  - PROCESS-NAME,Weixin.exe,DIRECT
+  - PROCESS-NAME,WeChatAppEx.exe,DIRECT
+  - PROCESS-NAME,WeChatApp.exe,DIRECT
+  - PROCESS-NAME,WeChatPlayer.exe,DIRECT
+  - PROCESS-NAME,WeChat,DIRECT
+  - PROCESS-NAME,Weixin,DIRECT
+  - PROCESS-NAME,WeChatAppEx,DIRECT
+  - PROCESS-NAME,WXWork.exe,DIRECT
+  - PROCESS-NAME,WeCom.exe,DIRECT
+  - PROCESS-NAME,Taobao.exe,DIRECT
+  - PROCESS-NAME,taobao.exe,DIRECT
+  - PROCESS-NAME,AliWorkbench.exe,DIRECT
+  - PROCESS-NAME,Qianniu.exe,DIRECT
+  - PROCESS-NAME,AliRender.exe,DIRECT
+  - PROCESS-NAME,Alipay.exe,DIRECT
+  - PROCESS-NAME,AliPay.exe,DIRECT
+  - PROCESS-NAME,AlipayMain.exe,DIRECT
+  - PROCESS-NAME,QQ.exe,DIRECT
+  - PROCESS-NAME,QQnt.exe,DIRECT
+  - PROCESS-NAME,com.tencent.mm,DIRECT
+  - PROCESS-NAME,com.tencent.wework,DIRECT
+  - PROCESS-NAME,com.eg.android.AlipayGphone,DIRECT
+  - PROCESS-NAME,com.taobao.taobao,DIRECT
+  - PROCESS-NAME,com.taobao.qianniu,DIRECT
+  - PROCESS-NAME,com.tmall.wireless,DIRECT
+  - PROCESS-NAME,com.taobao.idlefish,DIRECT
+  - PROCESS-NAME,com.alibaba.android.rimet,DIRECT
+  - PROCESS-NAME,com.tencent.mobileqq,DIRECT
+  - PROCESS-NAME,steam.exe,🎮 游戏平台
+  - PROCESS-NAME,steam.exe,REJECT
+  - PROCESS-NAME,steamwebhelper.exe,🎮 游戏平台
+  - PROCESS-NAME,steamwebhelper.exe,REJECT
+  - PROCESS-NAME,steam,🎮 游戏平台
+  - PROCESS-NAME,steam,REJECT
+  - PROCESS-NAME,steamwebhelper,🎮 游戏平台
+  - PROCESS-NAME,steamwebhelper,REJECT
+  - PROCESS-NAME,EpicGamesLauncher.exe,🎮 游戏平台
+  - PROCESS-NAME,EpicGamesLauncher.exe,REJECT
+  - PROCESS-NAME,EpicWebHelper.exe,🎮 游戏平台
+  - PROCESS-NAME,EpicWebHelper.exe,REJECT
+  - PROCESS-NAME,qbittorrent.exe,DIRECT
+  - PROCESS-NAME,qbittorrent,DIRECT
+  - PROCESS-NAME,Transmission.exe,DIRECT
+  - PROCESS-NAME,Transmission,DIRECT
+  - PROCESS-NAME,transmission-daemon,DIRECT
+  - PROCESS-NAME,uTorrent.exe,DIRECT
+  - PROCESS-NAME,WebTorrent.exe,DIRECT
+  - PROCESS-NAME,WebTorrent Helper.exe,DIRECT
+  - RULE-SET,ChinaCompanyIp,DIRECT
+  - RULE-SET,cncidr.txt,DIRECT
+  - RULE-SET,cn-ip-fallback,DIRECT
+  - MATCH,🐟 漏网之鱼
+  - MATCH,REJECT
+rule-providers:
+  Apple:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Apple.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple.list
+  AppleTV:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/AppleTV.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleTV/AppleTV.list
+  BBC:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/BBC.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BBC/BBC.list
+  Bahamut:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Bahamut.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Bahamut/Bahamut.list
+  Bilibili:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Bilibili.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/Bilibili.list
+  BilibiliHMT:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/BilibiliHMT.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/BilibiliHMT.list
+  Bing:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Bing.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Bing/Bing.list
+  ChinaCompanyIp:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/ChinaCompanyIp.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaCompanyIp.list
+  ChinaDomain:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/ChinaDomain.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list
+  ChinaMedia:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/ChinaMedia.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaMedia.list
+  DAZN:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/DAZN.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DAZN/DAZN.list
+  Discord:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Discord.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Discord/Discord.list
+  Disney:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Disney.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Disney/Disney.list
+  Emby:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Emby.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Emby/Emby.list
+  Epic:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Epic.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Epic/Epic.list
+  Facebook:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Facebook.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Facebook/Facebook.list
+  Google:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Google.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Google/Google.list
+  GoogleCN:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/GoogleCN.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/GoogleCN.list
+  HBO:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/HBO.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/HBO/HBO.list
+  HBOUSA:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/HBOUSA.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/HBOUSA/HBOUSA.list
+  Instagram:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Instagram.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Instagram/Instagram.list
+  LinkedIn:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/LinkedIn.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/LinkedIn/LinkedIn.list
+  LocalAreaNetwork:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/LocalAreaNetwork.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/LocalAreaNetwork.list
+  Microsoft:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Microsoft.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Microsoft/Microsoft.list
+  Netflix:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Netflix.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Netflix/Netflix.list
+  Nintendo:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Nintendo.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Nintendo/Nintendo.list
+  OneDrive:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/OneDrive.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/OneDrive/OneDrive.list
+  Pinterest:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Pinterest.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Pinterest/Pinterest.list
+  PlayStation:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/PlayStation.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PlayStation/PlayStation.list
+  PrimeVideo:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/PrimeVideo.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PrimeVideo/PrimeVideo.list
+  Reddit:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Reddit.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Reddit/Reddit.list
+  Spotify:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Spotify.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Spotify/Spotify.list
+  Steam:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Steam.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Steam/Steam.list
+  SteamCN:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/SteamCN.txt
+    type: http
+    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/SteamCN.list
+  Telegram:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Telegram.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Telegram/Telegram.list
+  Threads:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Threads.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Threads/Threads.list
+  TikTok:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/TikTok.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/TikTok/TikTok.list
+  Twitch:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Twitch.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitch/Twitch.list
+  Twitter:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Twitter.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.list
+  Whatsapp:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/Whatsapp.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Whatsapp/Whatsapp.list
+  YouTube:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/YouTube.txt
+    type: http
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.list
+  cn:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/cn.txt
+    type: http
+    url: https://raw.githubusercontent.com/VPSDance/ai-proxy-rules/main/rules/surge/cn.list
+  cn-ip-fallback:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/cn-ip-fallback.txt
+    type: http
+    url: https://raw.githubusercontent.com/FoLeaf/clash_rules_self/main/rules/cn-ip-fallback.list
+  cncidr.txt:
+    behavior: classical
+    interval: 86400
+    path: ./providers/cncidr.txt.yaml
+    type: http
+    url: https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/ruleset/cncidr.txt
+  direct.txt:
+    behavior: classical
+    interval: 86400
+    path: ./providers/direct.txt.yaml
+    type: http
+    url: https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/ruleset/direct.txt
+  gfw.txt:
+    behavior: classical
+    interval: 86400
+    path: ./providers/gfw.txt.yaml
+    type: http
+    url: https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/ruleset/gfw.txt
+  openai-ai:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/openai-ai.txt
+    type: http
+    url: https://raw.githubusercontent.com/FoLeaf/clash_rules_self/main/rules/openai-ai.list
+  overseas-ai:
+    behavior: classical
+    format: text
+    interval: 86400
+    path: ./providers/overseas-ai.txt
+    type: http
+    url: https://raw.githubusercontent.com/FoLeaf/clash_rules_self/main/rules/overseas-ai.list
+  telegram:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/telegram.mrs
+    path: ./ruleset/telegram.mrs
+    interval: 86400
+  telegram-ip:
+    type: http
+    format: mrs
+    behavior: ipcidr
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geoip/telegram.mrs
+    path: ./ruleset/telegram-ip.mrs
+    interval: 86400
+  microsoft:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/microsoft.mrs
+    path: ./ruleset/microsoft.mrs
+    interval: 86400
+  steam:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/steam.mrs
+    path: ./ruleset/steam.mrs
+    interval: 86400
+  epicgames:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/epicgames.mrs
+    path: ./ruleset/epicgames.mrs
+    interval: 86400
+  ea:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/ea.mrs
+    path: ./ruleset/ea.mrs
+    interval: 86400
+  ubisoft:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/ubisoft.mrs
+    path: ./ruleset/ubisoft.mrs
+    interval: 86400
+  blizzard:
+    type: http
+    format: mrs
+    behavior: domain
+    url: https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/blizzard.mrs
+    path: ./ruleset/blizzard.mrs
+    interval: 86400
