@@ -22,14 +22,29 @@ VLESS UDP 转发时开启 MiSub 的 UDP 转发选项。步骤见 [`docs/misub.md
   use DIRECT. Steam's location-detection and download hosts are also DIRECT and
   stay that way when the game group is switched to a node (see below).
 - Overseas AI, social, streaming and game services use their respective groups.
-- Google Search, account login and shared Google APIs use node selection,
-  including `google.com`, `www.google.com`, `accounts.google.com`,
-  `myaccount.google.com`, `ogs.google.com`, `apis.google.com`,
-  `oauth2.googleapis.com` and `accounts.googleusercontent.com`. Gemini,
-  AI Studio and dedicated Google AI APIs keep using AI. Domain rules cannot
-  distinguish a Gemini login from another site's Google login, or Google's
-  `/sorry` path from ordinary search. These shared hosts therefore stay out
-  of the AI group; align the two exits manually if a specific login requires it.
+- Exactly one ad domain is blocked: `mediav.com` (360 promotion and telemetry;
+  `safesvr.exe` was observed calling `track-sp.mediav.com` 1 590 times in a day
+  through the US node). It is the only `REJECT` in this template that is not a
+  UDP twin, and it sits directly after the LAN rules so that no domestic DIRECT
+  list can claim it first. Everything else keeps the upstream "no ad blocking"
+  behaviour.
+- All of Google uses node selection. `google.com`, `gstatic.com` and
+  `googleapis.com` are pinned as three `DOMAIN-SUFFIX` rules in the marked
+  `GOOGLE SINGLE EGRESS` block, ahead of `GoogleCN`, `ChinaDomain`, the
+  overseas AI list and `Google.list`. A page fetches its document from
+  `google.com`, its fonts and scripts from `gstatic.com`/`googleapis.com` and
+  its APIs from `googleapis.com`; if any one of them leaves through a
+  different group or through DIRECT, Google sees a single session arriving
+  from two IPs and answers with captcha challenges, rejected logins or broken
+  AI features. Consequences: Gemini, AI Studio and
+  `generativelanguage.googleapis.com` follow their suffix into node selection
+  instead of AI; the `GoogleCN` DIRECT entries for `dl.google.com`,
+  `fonts.googleapis.com` and `fonts.gstatic.com` are shadowed; `epicgames-download1.
+  storage.googleapis.com` keeps the game group only because its exception sits
+  immediately above the block; `stun*.l.google.com` keeps using AI only because
+  its explicit STUN rule sits above the block. Switch the exit in node
+  selection — re-pinning individual Google subdomains to another group
+  reintroduces the two-IP page.
 - OpenAI traffic is pinned inline to AI immediately after the LAN rules and
   before domestic process overrides. ChatGPT, Codex, API, authentication, file
   transfers, updates, documentation, status and WebSocket subdomains are covered
@@ -91,8 +106,9 @@ VLESS UDP 转发时开启 MiSub 的 UDP 转发选项。步骤见 [`docs/misub.md
   The canonical source is [`rules/steam-direct.list`](rules/steam-direct.list);
   its rules must stay identical to the marked block in the INI.
 - `steamusercontent.com`, `steamchina.com` and Epic's download CDN
-  `epicgames-download1.storage.googleapis.com` (otherwise claimed by Google
-  list's `googleapis.com` suffix) are pinned inline to the game group ahead of
+  `epicgames-download1.storage.googleapis.com` (otherwise claimed by the
+  `googleapis.com` single-egress suffix, which it must stay ahead of) are
+  pinned inline to the game group ahead of
   every other match. Steam/Epic client processes (`steam.exe`,
   `steamwebhelper.exe`, `EpicGamesLauncher.exe`, …) fall back to the game group
   after all destination rules, catching IP-only connections that no domain rule
@@ -242,6 +258,20 @@ appear in the cached client profile. An additional conversion base or later
 processing stage therefore supplies those settings. Replacing that base from
 this INI requires preserving its other fields and defining the DNS exit group;
 changing only a `ruleset=` line cannot make a direct route use local DNS.
+
+### Rules-only resolution (2026-11-18)
+
+The `GOOGLE SINGLE EGRESS` block settles this at the routing layer instead of
+the DNS layer: `gstatic.com` and `googleapis.com` are pinned to node selection
+before `GoogleCN`, so `fonts.gstatic.com` and `fonts.googleapis.com` no longer
+reach the DIRECT entries that produced the unreachable `142.251.x.x` answers.
+`dl.google.com`, `cache.pack.google.com` and `tools.google.com` take the same
+exit. The trade-off named above — "a rules-only workaround could instead send
+Fonts through a proxy, but would change the intended traffic exit" — is now
+accepted deliberately: Fonts leaves through the selected node together with the
+rest of the page, which also removes the mixed-IP page load. Keep
+`direct-nameserver-follow-policy: false` in the client base; it still matters
+for every other DIRECT destination.
 
 ## Client Prerequisites
 

@@ -403,6 +403,8 @@ class ConfigTests(unittest.TestCase):
             "browser-intake-datadoghq.com": NODE,
             "accounts.google.com": NODE,
             "unrelated.auth0.com": NODE,
+            "mediav.com": "REJECT",
+            "track-sp.mediav.com": "REJECT",
             "unmatched.example": FALLBACK,
         }
         for domain, expected in cases.items():
@@ -445,34 +447,46 @@ class ConfigTests(unittest.TestCase):
 
     def test_overseas_destinations_precede_domestic_process_fallbacks(self):
         for process in ("WeChat.exe", "QQ.exe", "com.tencent.mm", "com.taobao.taobao"):
-            for domain, expected in (("claude.com", AI), ("gemini.google.com", AI),
+            for domain, expected in (("claude.com", AI), ("gemini.google.com", NODE),
                                      ("accounts.google.com", NODE), ("linux.sb", NODE),
                                      ("unrelated.auth0.com", NODE),
                                      ("services.googleapis.cn", NODE)):
                 with self.subTest(domain=domain, process=process):
                     self.assertEqual(first_match(self.inline, domain, process), expected)
 
-    def test_shared_google_domains_use_node_selection(self):
-        # Search and Google identity are shared by non-AI services. A Gemini
-        # login must not pin every site's Google login to the AI exit.
-        shared = ("google.com", "www.google.com", "accounts.google.com",
-                  "myaccount.google.com", "ogs.google.com", "apis.google.com",
-                  "oauth2.googleapis.com", "accounts.googleusercontent.com")
-        for domain in shared:
+    def test_google_suffixes_share_one_egress(self):
+        # google.com / gstatic.com / googleapis.com are pinned to one group so a
+        # single page cannot exit through two IPs: Google treats a mid-session
+        # IP change as a hijacked session (captcha, rejected logins, broken AI).
+        # Consequence: Gemini / AI Studio / generativelanguage follow their
+        # suffix into node selection instead of the AI group.
+        suffixes = ("google.com", "gstatic.com", "googleapis.com")
+        hosts = ("google.com", "www.google.com", "accounts.google.com",
+                 "myaccount.google.com", "ogs.google.com", "apis.google.com",
+                 "oauth2.googleapis.com", "accounts.googleusercontent.com",
+                 "dl.google.com", "cache.pack.google.com", "tools.google.com",
+                 "fonts.googleapis.com", "fonts.gstatic.com", "www.gstatic.com",
+                 "ajax.googleapis.com", "gemini.google.com", "aistudio.google.com",
+                 "generativelanguage.googleapis.com")
+        for domain in hosts:
             for process in (None, "firefox.exe", "WeChat.exe", "com.tencent.mm"):
                 with self.subTest(domain=domain, process=process):
                     self.assertEqual(first_match(self.inline, domain, process), NODE)
             with self.subTest(normalized=domain):
                 self.assertEqual(first_match(self.inline, domain.upper() + "."), NODE)
+        for suffix in suffixes:
+            block = self.position("[]DOMAIN-SUFFIX," + suffix)
+            for later in ("/GoogleCN.list", "/ChinaDomain.list", "/overseas-ai.list",
+                          "/Google.list"):
+                self.assertLess(block, self.position(later), (suffix, later))
+        # The AI group must not swallow Google again; its list entries for
+        # Gemini/AI Studio are shadowed by design.
         ai_rules = [(policy, rule) for policy, rule in self.inline if policy == AI]
-        aggregate = [(AI, rule) for rule in active_lines(
-            (ROOT / "rules/overseas-ai.list").read_text(encoding="utf-8"))]
-        for domain in ("gemini.google.com", "aistudio.google.com",
-                       "generativelanguage.googleapis.com"):
-            with self.subTest(ai_service=domain):
-                self.assertEqual(first_match(ai_rules + aggregate, domain), AI)
-        for domain in shared:
-            self.assertIsNone(first_match(ai_rules + aggregate, domain), domain)
+        for domain in suffixes:
+            self.assertIsNone(first_match(ai_rules, "www." + domain), domain)
+        # Explicit exceptions still win over the blanket suffixes.
+        self.assertEqual(first_match(self.inline, "epicgames-download1.storage.googleapis.com"), GAMES)
+        self.assertEqual(first_match(self.inline, "stun.l.google.com"), AI)
 
     def test_inline_rules_survive_client_conversion(self):
         # Clash Party's converter keeps only TYPE,VALUE from an inline rule and
@@ -781,8 +795,9 @@ class LiveRulesTests(unittest.TestCase):
             "anthropic.auth0.com": AI,
             "chatgpt.com": AI,
             "api.openai.com": AI,
-            "gemini.google.com": AI,
-            "generativelanguage.googleapis.com": AI,
+            "gemini.google.com": NODE,
+            "aistudio.google.com": NODE,
+            "generativelanguage.googleapis.com": NODE,
             "accounts.google.com": NODE,
             "google.com": NODE,
             "www.google.com": NODE,
@@ -809,7 +824,10 @@ class LiveRulesTests(unittest.TestCase):
             "stun.l.google.com": AI,
             "stun.cloudflare.com": AI,
             "unrelated.auth0.com": NODE,
-            "dl.google.com": "DIRECT",
+            "fonts.googleapis.com": NODE,
+            "fonts.gstatic.com": NODE,
+            "track-sp.mediav.com": "REJECT",
+            "dl.google.com": NODE,
             "www.youtube.com": MEDIA,
             "rr1.googlevideo.com": MEDIA,
             "www.netflix.com": MEDIA,
