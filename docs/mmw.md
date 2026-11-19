@@ -45,6 +45,39 @@ ssh -p 42387 root@107.174.123.74 \
 
 出现 `模板生成失败，回退到原始文件` 就是又回到旧规则了。
 
+## ISP 住宅落地（双跳）
+
+外部 ISP 订阅（`ai01.teleapi.top` 那类静态住宅）的节点**不进 mmw 节点表**，而是由客户端按
+`proxy-providers` 拉取；前置跳板用 mmw 里的自有节点。整条链路由一个 post_fetch 覆写脚本
+生成，源码在 [`mmw/isp-chain.post_fetch.js`](../mmw/isp-chain.post_fetch.js)，
+线上存在 `override_scripts` 表（hook = `post_fetch`），绑定在 mirago / sublinkpro 两个订阅上。
+
+```
+本机 → 🚀 前置（自有节点，默认 SG-AWS）
+        └─ dialer-proxy ─→ 🌄 落地ISP (双跳)（provider 展开的 204 个住宅 IP）
+                             └─ 🛟 落地回落 (双跳)：fallback，ISP 不可用回落 🚀 节点选择
+```
+
+实现要点：
+
+- **provider 必须由脚本注入，不能写在模板里**。mmw 会在 post_fetch 之前剥掉模板里的
+  `proxy-providers`（没有组引用时直接删，有 `use` 组时又只在自己的 provider 表里找，
+  找不到就把组兜底成当前 4 个节点）。脚本的输出是最终结果，所以
+  `config["proxy-providers"]` 在脚本里写才稳。
+- **链式靠 provider 的 `override.dialer-proxy`**，不是逐节点改。204 个节点由 provider 展开，
+  每一条都自动带上前置，不需要 mmw 节点表参与。
+- **防环**：`🚀 节点选择`、`♻️ 自动选择`、`⚖️ 负载均衡` 三个组不能挂 `🛟 落地回落`，
+  否则 `回落 → 落地ISP → 前置 → 节点选择 → 回落` 成环，mihomo 直接拒绝加载
+  （实测报 `loop is detected in ProxyGroup`）。其余业务组都挂上。
+- **落地组用 select 不用 url-test**：住宅 IP 的价值是固定出口，测速会让它漂移；
+  `🛟 落地回落` 设 `lazy: true` + `interval: 3600`，不被选中时不探活，避免烧住宅流量。
+
+验收只看一条：把某个业务组切到 `🛟 落地回落 (双跳)`，取出口 IP，必须等于
+`🌄 落地ISP` 当前选中节点名里的那个 IP。实测 `US-静态01🇺🇸「梅薩」 168.158.211.179` →
+`{"ip":"168.158.211.179"}`，2.5s。
+
+改脚本后要同步两处：仓库里的 `.js` 和线上 `override_scripts.content`；只改仓库不生效。
+
 ## 几个坑
 
 - **`*.txt.yaml` 规则集必须带 `format: text`**。转换器把 Loyalsoldier 的明文列表存成
