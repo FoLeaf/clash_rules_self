@@ -50,7 +50,9 @@ ssh -p 42387 root@107.174.123.74 \
 外部 ISP 订阅（`ai01.teleapi.top` 那类静态住宅）的节点**不进 mmw 节点表**，而是由客户端按
 `proxy-providers` 拉取；前置跳板用 mmw 里的自有节点。整条链路由一个 post_fetch 覆写脚本
 生成，源码在 [`mmw/isp-chain.post_fetch.js`](../mmw/isp-chain.post_fetch.js)，
-线上存在 `override_scripts` 表（hook = `post_fetch`），绑定在 mirago / sublinkpro 两个订阅上。
+线上存在 `override_scripts` 表（hook = `post_fetch`）。
+
+**只挂在独立订阅 `chainproxy` 上**（`/mmw/chnL6z9knWd`），`mirage` 与 `sublinkpro` 保持原样。
 
 ```
 本机 → 🚀 前置（自有节点，默认 SG-AWS）
@@ -71,6 +73,20 @@ ssh -p 42387 root@107.174.123.74 \
   （实测报 `loop is detected in ProxyGroup`）。其余业务组都挂上。
 - **落地组用 select 不用 url-test**：住宅 IP 的价值是固定出口，测速会让它漂移；
   `🛟 落地回落` 设 `lazy: true` + `interval: 3600`，不被选中时不探活，避免烧住宅流量。
+
+### 订阅与脚本的绑定关系
+
+`subscribe_files.selected_override_script_ids` 的语义有个坑：**空数组不是"不执行"，而是"执行全部启用的脚本"**。
+要让某个订阅跑脚本，填 `[脚本id]`；要让它**不**跑，得填一个不存在的 id（当前用 `[999]`）。
+日志能验证：
+
+```
+selected_ids=[999] → 跳过未选中的脚本
+selected_ids=[1]   → post_fetch 脚本执行成功
+```
+
+另外别把 ISP 节点导进 mmw 节点表：`type: create` 的订阅会把表里所有启用节点都吐出来，
+204 个住宅 IP 一进表，订阅体积立刻从 36KB 涨到 104KB。
 
 验收只看一条：把某个业务组切到 `🛟 落地回落 (双跳)`，取出口 IP，必须等于
 `🌄 落地ISP` 当前选中节点名里的那个 IP。实测 `US-静态01🇺🇸「梅薩」 168.158.211.179` →
