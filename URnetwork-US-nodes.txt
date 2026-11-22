@@ -1,0 +1,5 @@
+socks://06H04I1R5P3MFPS4IP7R93VD668CRNJQ2C0K7VJHH0FSQPTH9K72QC6UCK:@fireside.bringyour.com:7171#URnetwork-US-Mt.Pleasant-AT&TEnterprises,LLC-Clean
+socks://06H04RUGB54SIMHTH24RE1JONDKC74QLG5K3E37MK4J9T3MDEDMGOH02JG:@fireside.bringyour.com:7165#URnetwork-US-Raleigh-GoogleFiberInc.-Clean
+socks://06H04M6ILAATLOGUCTPGBASS98FPB9P26DDG5F8E8DPICKSLTK40Q0MJ48:@fireside.bringyour.com:7147#URnetwork-US-KansasCity-GoogleFiberInc.-Clean
+socks://06H04M8TE92AK08KOMH3PSQ8J35JHK8Q90QGC54VFFCLO5JKCCCIO574SK:@crisp.bringyour.com:7171#URnetwork-US-Cranston-VerizonBusiness-Clean
+socks://06H04OF9CNL4QB9C8I1406N80I96MQIPMLPLNU4VTE8E3J81VRQS53O984:@fireside.bringyour.com:7147#URnetwork-US-SanDiego-CharterCommunicationsInc-Clean
